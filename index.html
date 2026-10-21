@@ -1,0 +1,1856 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ligamester</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: toppfelt med klubb og neste kamp, fanerad, innhold i kort og tabeller. Bane-grafikk for oppstilling. */
+:root{
+  --bg:#EBF0EC; --surface:#F7FAF7; --surface2:#E2EAE4; --ink:#14241C; --muted:#586A60; --line:#C7D3CB;
+  --pitch:#2F7F57; --pitch2:#2B7552; --pitch-line:rgba(255,255,255,.55);
+  --accent:#E6B31A; --accent-ink:#2A2000; --good:#1D7F49; --bad:#BE3B28; --warn:#9A6A12; --link:#1B6B46;
+  --h0-bg:#E5ECE7; --h0-fg:#586A60; --h1-bg:#CFE4D7; --h1-fg:#14241C; --h2-bg:#A3D2B5; --h2-fg:#0E2A1C;
+  --h3-bg:#5DB083; --h3-fg:#07221A; --h4-bg:#1B6F45; --h4-fg:#FFFFFF;
+  --f-display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --f-body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --shadow:0 1px 0 rgba(20,36,28,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1914; --surface:#15241D; --surface2:#1C2E25; --ink:#E5EEE8; --muted:#8CA195; --line:#26392F;
+    --pitch:#1D5A3E; --pitch2:#1A5238; --pitch-line:rgba(255,255,255,.38);
+    --accent:#F0C23A; --accent-ink:#241A00; --good:#4CC17E; --bad:#F0735E; --warn:#E3B04B; --link:#7DD3A5;
+    --h0-bg:#1B2B23; --h0-fg:#8CA195; --h1-bg:#20382C; --h1-fg:#D2E6DA; --h2-bg:#285640; --h2-fg:#E5F3EA;
+    --h3-bg:#34805C; --h3-fg:#FFFFFF; --h4-bg:#52BC87; --h4-fg:#04170E;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1914; --surface:#15241D; --surface2:#1C2E25; --ink:#E5EEE8; --muted:#8CA195; --line:#26392F;
+  --pitch:#1D5A3E; --pitch2:#1A5238; --pitch-line:rgba(255,255,255,.38);
+  --accent:#F0C23A; --accent-ink:#241A00; --good:#4CC17E; --bad:#F0735E; --warn:#E3B04B; --link:#7DD3A5;
+  --h0-bg:#1B2B23; --h0-fg:#8CA195; --h1-bg:#20382C; --h1-fg:#D2E6DA; --h2-bg:#285640; --h2-fg:#E5F3EA;
+  --h3-bg:#34805C; --h3-fg:#FFFFFF; --h4-bg:#52BC87; --h4-fg:#04170E;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3,h4{font-family:var(--f-display);font-weight:600;letter-spacing:.02em;margin:0;text-wrap:balance}
+button,select,input{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.tiny{font-size:12px}
+.caps{text-transform:uppercase;letter-spacing:.08em;font-size:12px;font-weight:600;color:var(--muted)}
+a{color:var(--link)}
+
+/* topp */
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:16px 0 12px}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand b{font:700 28px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+.brand span{font-size:13px;color:var(--muted)}
+.topinfo{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.club{display:flex;align-items:center;gap:10px;min-width:0}
+.club b{font:600 20px/1.1 var(--f-display);letter-spacing:.02em}
+.stat{display:flex;flex-direction:column;line-height:1.15}
+.stat .v{font:600 18px/1.1 var(--f-display);letter-spacing:.02em}
+.crest{display:block;flex:none}
+
+/* faner */
+.tabs{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:20px;scrollbar-width:thin}
+.tab{appearance:none;background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px 8px;margin-bottom:-1px;
+  font:600 17px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* kort og rutenett */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.card h3{font-size:20px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card h3 small{font:500 13px var(--f-body);color:var(--muted);letter-spacing:0}
+.sectionhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px;flex-wrap:wrap}
+.sectionhead h2{font-size:26px;text-transform:uppercase}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+table{border-collapse:collapse;width:100%}
+th,td{padding:7px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{font:600 12px/1.2 var(--f-body);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--surface2);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.me td{background:color-mix(in srgb,var(--accent) 16%,var(--surface))}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface2)}
+td.r,th.r{text-align:right}
+td.c,th.c{text-align:center}
+
+/* knapper */
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 14px;border-radius:3px;cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden;flex-wrap:wrap}
+.seg button{appearance:none;border:0;border-right:1px solid var(--line);background:var(--surface);padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+select,input[type=number],input[type=text]{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:6px 8px;max-width:100%}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+label.f select,label.f input{font-size:15px;letter-spacing:0;text-transform:none;color:var(--ink);font-weight:500}
+
+/* egenskaper */
+.sk{display:inline-block;min-width:2.3em;padding:2px 0;text-align:center;border-radius:2px;font:600 14px/1.2 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.sk.h0{background:var(--h0-bg);color:var(--h0-fg)} .sk.h1{background:var(--h1-bg);color:var(--h1-fg)} .sk.h2{background:var(--h2-bg);color:var(--h2-fg)}
+.sk.h3{background:var(--h3-bg);color:var(--h3-fg)} .sk.h4{background:var(--h4-bg);color:var(--h4-fg)}
+.spec{display:inline-block;font:600 11px/1 var(--f-display);letter-spacing:.07em;text-transform:uppercase;padding:3px 5px 2px;border-radius:2px;border:1px solid var(--line);color:var(--muted);vertical-align:2px}
+.tag{display:inline-block;font:600 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:3px 6px;border-radius:2px;background:var(--surface2);color:var(--muted)}
+.tag.ai{background:transparent;border:1px solid var(--line)}
+.tag.human{background:var(--accent);color:var(--accent-ink)}
+.tag.sale{background:color-mix(in srgb,var(--warn) 22%,var(--surface));color:var(--warn)}
+.pname{font-weight:600}
+.up{color:var(--good)} .down{color:var(--bad)}
+.bar{height:8px;background:var(--surface2);border-radius:1px;overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--pitch)}
+.bar.acc i{background:var(--accent)}
+
+/* sektorratinger */
+.ratings{display:grid;gap:6px}
+.rrow{display:grid;grid-template-columns:minmax(98px,128px) 1fr 38px;gap:10px;align-items:center;font-size:14px}
+.rrow .lab{color:var(--muted)}
+.rrow .val{font:600 17px var(--f-display);text-align:right;font-variant-numeric:tabular-nums}
+.rbar{position:relative;height:10px;background:var(--surface2);border-radius:1px}
+.rbar i{position:absolute;left:0;top:0;bottom:0;background:var(--pitch);border-radius:1px}
+.rbar i.opp{top:auto;height:4px;background:var(--accent);bottom:0;border-radius:0}
+.rbar.duo{height:14px}
+.rbar.duo i:first-child{bottom:6px}
+
+/* bane */
+.lineup{display:grid;grid-template-columns:minmax(0,500px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.lineup{grid-template-columns:minmax(0,1fr)}}
+.pitchbox{display:flex;flex-direction:column;gap:12px}
+.pitch{position:relative;width:100%;max-width:520px;aspect-ratio:100/128;border:2px solid var(--pitch-line);border-radius:3px;
+  background:repeating-linear-gradient(to bottom,var(--pitch) 0 8.33%,var(--pitch2) 8.33% 16.66%);overflow:hidden;touch-action:manipulation}
+.pitch svg{position:absolute;inset:0;width:100%;height:100%}
+.pitch svg *{fill:none;stroke:var(--pitch-line);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.slot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;padding:0;cursor:pointer;width:25%;color:#fff}
+.slot .dot{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font:700 16px var(--f-display);letter-spacing:.03em;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.slot .nm{font:600 12px/1.15 var(--f-body);background:rgba(8,24,16,.72);padding:1px 5px;border-radius:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .ord{font:600 10px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.slot[aria-pressed="true"] .dot{outline:3px solid var(--accent);outline-offset:2px}
+.slot.empty .dot{background:rgba(0,0,0,.25)!important;border-style:dashed}
+@media (max-width:460px){.slot .dot{width:36px;height:36px;font-size:14px}.slot .nm{font-size:11px}}
+
+/* kamp */
+.scoreline{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center}
+.scoreline .tm{display:flex;align-items:center;gap:10px;min-width:0}
+.scoreline .tm.away{justify-content:flex-end;text-align:right;flex-direction:row-reverse}
+.scoreline .tm b{font:600 22px/1.1 var(--f-display);overflow-wrap:anywhere}
+.score{font:700 44px/1 var(--f-display);letter-spacing:.04em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fx{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left;cursor:pointer;color:inherit}
+.fx:last-child{border-bottom:0}
+.fx:hover{background:var(--surface2)}
+.fx.me{background:color-mix(in srgb,var(--accent) 16%,var(--surface))}
+.fx .t{display:flex;align-items:center;gap:8px;min-width:0}
+.fx .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx .t.a{justify-content:flex-end;flex-direction:row-reverse}
+.fx .sc{font:700 20px/1 var(--f-display);min-width:60px;text-align:center;font-variant-numeric:tabular-nums}
+.timeline{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.timeline li{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:baseline}
+.timeline .min{font:600 16px var(--f-display);color:var(--muted);text-align:right}
+.timeline .ev.a{text-align:left}
+.timeline .ev.h{text-align:left}
+
+/* modal og toast */
+.ov{position:fixed;inset:0;background:rgba(5,14,10,.55);display:grid;place-items:start center;overflow-y:auto;padding:max(24px,env(safe-area-inset-top,0px)) 16px 24px;z-index:50}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:4px;width:min(720px,100%);padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.modal h3{font-size:24px}
+.modal .x{float:right}
+#toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;display:grid;gap:8px;width:min(480px,calc(100% - 32px))}
+.toast{background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:3px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.toast.err{background:var(--bad);color:#fff}
+.note{border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));padding:10px 12px;border-radius:0 3px 3px 0}
+.teamgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px}
+.tcard{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+.tcard .meta{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tcard b{font:600 19px/1.1 var(--f-display);overflow-wrap:anywhere}
+.tcard .act{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.help h3{margin:18px 0 6px;font-size:20px}
+.help p,.help li{max-width:68ch}
+.help ul{padding-left:20px;margin:6px 0}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.tab,.btn{transition:background .12s,border-color .12s}}
+.timeline .ev .crest{display:inline-block;vertical-align:-3px}
+.tcard .meta .tag{align-self:flex-start}
+.scoreline{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.scoreline .tm b{font-size:20px;overflow-wrap:break-word;text-wrap:balance}
+.fx{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.fx .t span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15}
+.modal .x{float:none;display:block;margin:0 0 10px auto}
+.feed{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:0}
+.feed li{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line);align-items:baseline}
+.feed li:first-child{border-top:0}
+.feed .min{font:600 16px var(--f-display);color:var(--muted);text-align:right}
+.feed .tx{max-width:70ch}
+.feed li.goal{background:color-mix(in srgb,var(--accent) 16%,var(--surface));margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:2px}
+.feed li.goal .tx b{color:var(--good);letter-spacing:.04em}
+.feed li.sys .tx{color:var(--muted);font-style:italic}
+.fx.sel{box-shadow:inset 3px 0 0 var(--accent)}
+.fx .sc small.live{display:block;font:600 11px/1 var(--f-body);letter-spacing:.04em;color:var(--bad);margin-top:3px}
+@media (max-width:560px){
+.scoreline{gap:8px}
+.scoreline .tm{min-width:0;flex:1 1 0;gap:6px}
+.scoreline .tm b{font-size:15px;line-height:1.15}
+.scoreline .tm svg{flex:none;width:26px;height:auto}
+.scoreline .score{font-size:30px}
+}
+.authform{display:grid;gap:14px;margin-top:12px}
+.authform label{display:grid;gap:6px;font-weight:500}
+.authform input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--ink)}
+.authform input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.acct{max-width:1180px;margin:24px auto;padding:0 16px;display:flex;gap:10px;align-items:center;justify-content:flex-end;color:var(--muted);font-size:14px}
+body.loggedout .acct{display:none}
+
+.kort{display:inline-block;width:10px;height:14px;border-radius:2px;vertical-align:-2px}
+.kort.y{background:#E8B312}.kort.r{background:#C8102E}
+.ycn{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ycn .kort{margin-right:3px;width:8px;height:11px;vertical-align:-1px}
+.tag.red{background:color-mix(in srgb,var(--bad) 20%,var(--surface));color:var(--bad)}
+.tag.cap{background:var(--ink);color:var(--bg)}
+.feed li.red .tx{font-weight:600}
+.subrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end;padding:12px 0;border-top:1px solid var(--line)}
+.subrow:first-of-type{border-top:0}
+.subrow select{max-width:100%}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top" id="top"></header>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Hovedmeny"></nav>
+  <main id="view"></main>
+</div>
+<div id="modal"></div>
+<div id="toast" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+<script>window.LM_CONFIG={url:'https://smhzszluqoatojlnjyow.supabase.co',key:'sb_publishable_rVwsg9N7J19mjY5GzdppVA_7LXuVzLe'};</script>
+<script>
+/* ===== Ligamester: spillmotor (ren logikk, ingen DOM) ===== */
+const Engine = (() => {
+'use strict';
+
+const SK = ['kp','df','mf','ps','wg','sc','sp'];
+const SKI = {}; SK.forEach((k,i)=>{ SKI[k]=i; });
+const SK_NAME = {kp:'Keeper', df:'Forsvar', mf:'Midtbane', ps:'Pasning', wg:'Ving', sc:'Scoring', sp:'Dødballer'};
+const SK_SHORT = {kp:'KEE', df:'FOR', mf:'MID', ps:'PAS', wg:'VIN', sc:'SCO', sp:'DØD'};
+const SEC = ['LD','CD','RD','MD','LA','CA','RA'];
+const SEC_NAME = {LD:'Forsvar venstre', CD:'Forsvar midten', RD:'Forsvar høyre', MD:'Midtbane', LA:'Angrep venstre', CA:'Angrep midten', RA:'Angrep høyre'};
+const SPEC = {hode:'Hode', rask:'Rask', teknisk:'Teknisk', kraftfull:'Kraftfull', uforutsigbar:'Uforutsigbar'};
+const SPEC_INFO = {
+  hode:'Farlig på dødballer og innlegg, og stopper motstanderens dødballer.',
+  rask:'Sterkere i angrep og skaper ekstra kontringer.',
+  teknisk:'Styrker midtbane og angrep gjennom midten.',
+  kraftfull:'Sterkere i forsvar og midtbane, og mindre påvirket av dårlig form.',
+  uforutsigbar:'Kan gjøre noe genialt, som regel en gjennombruddspassning (oftere jo bedre pasning han har), eller noe katastrofalt.'
+};
+const ROLE_NAME = {GK:'Keeper', CB:'Midtstopper', WB:'Back', IM:'Midtbane', W:'Ving', FW:'Spiss'};
+const ORDER_NAME = {normal:'Normal', def:'Defensiv', off:'Offensiv', left:'Mot venstre', right:'Mot høyre', mid:'Inn mot midten'};
+const SLOT_NAME = {GK:'Keeper', DL:'Venstre back', DC:'Midtstopper', DR:'Høyre back', WL:'Venstre ving', WR:'Høyre ving', AL:'Venstre angrepsving', AR:'Høyre angrepsving', MC:'Midtbane', FC:'Spiss'};
+const SLOT_ROLE = {GK:'GK', DC:'CB', DL:'WB', DR:'WB', WL:'W', WR:'W', AL:'W', AR:'W', MC:'IM', FC:'FW'};
+const SLOT_SIDE = {DL:'L', WL:'L', AL:'L', DR:'R', WR:'R', AR:'R'};
+
+const N_TEAMS = 14, ROUNDS = 26, SQUAD_MIN = 15, SQUAD_MAX = 28, MATCH_DAYS = [1,4,6]; // tirsdag, fredag, søndag
+const START_MONEY = 2000000, SPONSOR_WEEK = 50000, GATE_HOME = 20000, WIN_BONUS = 5000;
+const PRIZES = [600000, 350000, 200000];
+
+const FORMATIONS = {
+  '4-4-2': ['GK','DL','DC','DC','DR','WL','MC','MC','WR','FC','FC'],
+  '4-3-3': ['GK','DL','DC','DC','DR','MC','MC','MC','AL','FC','AR'],
+  '3-5-2': ['GK','DC','DC','DC','WL','MC','MC','MC','WR','FC','FC'],
+  '4-5-1': ['GK','DL','DC','DC','DR','WL','MC','MC','MC','WR','FC'],
+  '5-3-2': ['GK','DL','DC','DC','DC','DR','MC','MC','MC','FC','FC'],
+  '3-4-3': ['GK','DC','DC','DC','WL','MC','MC','WR','AL','FC','AR'],
+  '5-4-1': ['GK','DL','DC','DC','DC','DR','WL','MC','MC','WR','FC']
+};
+const LAYOUT = {
+  '4-4-2': [[50,90],[11,70],[36,73],[64,73],[89,70],[11,46],[37,50],[63,50],[89,46],[34,17],[66,17]],
+  '4-3-3': [[50,90],[11,70],[36,73],[64,73],[89,70],[25,50],[50,54],[75,50],[13,22],[50,13],[87,22]],
+  '3-5-2': [[50,90],[24,73],[50,75],[76,73],[9,46],[30,51],[50,54],[70,51],[91,46],[34,17],[66,17]],
+  '4-5-1': [[50,90],[11,70],[36,73],[64,73],[89,70],[9,44],[30,51],[50,47],[70,51],[91,44],[50,15]],
+  '5-3-2': [[50,90],[8,66],[28,73],[50,75],[72,73],[92,66],[27,48],[50,52],[73,48],[34,17],[66,17]],
+  '3-4-3': [[50,90],[24,73],[50,75],[76,73],[9,46],[38,50],[62,50],[91,46],[13,22],[50,13],[87,22]],
+  '5-4-1': [[50,90],[8,66],[28,73],[50,75],[72,73],[92,66],[9,44],[38,50],[62,50],[91,44],[50,15]]
+};
+
+/* Hva hver posisjon bidrar med til de sju sektorene: [sektor, egenskap, vekt] */
+const CT = {
+  GK:[['LD','kp',.30],['CD','kp',.95],['RD','kp',.30]],
+  DC:[['CD','df',1],['LD','df',.22],['RD','df',.22],['MD','mf',.10]],
+  DL:[['LD','df',1],['CD','df',.35],['MD','mf',.10],['LA','wg',.25],['LA','ps',.05]],
+  DR:[['RD','df',1],['CD','df',.35],['MD','mf',.10],['RA','wg',.25],['RA','ps',.05]],
+  WL:[['LD','df',.35],['MD','mf',.55],['MD','ps',.10],['LA','wg',.85],['LA','ps',.20],['CA','sc',.12],['CA','ps',.15]],
+  WR:[['RD','df',.35],['MD','mf',.55],['MD','ps',.10],['RA','wg',.85],['RA','ps',.20],['CA','sc',.12],['CA','ps',.15]],
+  AL:[['LD','df',.12],['MD','mf',.25],['LA','wg',1],['LA','ps',.25],['CA','sc',.22],['CA','ps',.12]],
+  AR:[['RD','df',.12],['MD','mf',.25],['RA','wg',1],['RA','ps',.25],['CA','sc',.22],['CA','ps',.12]],
+  MC:[['CD','df',.25],['CD','mf',.15],['LD','df',.10],['RD','df',.10],['MD','mf',1],['CA','ps',.40],['CA','mf',.10],['LA','ps',.15],['RA','ps',.15]],
+  FC:[['CA','sc',1],['CA','ps',.25],['MD','mf',.12],['LA','sc',.18],['RA','sc',.18]]
+};
+const isD = s => s==='LD'||s==='CD'||s==='RD';
+const isA = s => s==='LA'||s==='CA'||s==='RA';
+
+function ordersFor(st){
+  if(st==='GK') return ['normal'];
+  if(SLOT_SIDE[st]) return ['normal','def','off','mid'];
+  return ['normal','def','off','left','right'];
+}
+
+const _oc = {};
+function orderedContribs(st, ord){
+  const key = st+'|'+ord; if(_oc[key]) return _oc[key];
+  let list = CT[st].map(c=>c.slice());
+  if(ord==='def') list.forEach(c=>{ if(isD(c[0])) c[2]*=1.30; else if(isA(c[0])) c[2]*=0.55; });
+  else if(ord==='off') list.forEach(c=>{ if(isA(c[0])) c[2]*=1.30; else if(isD(c[0])) c[2]*=0.55; });
+  else if(ord==='left'||ord==='right'){
+    const out=[];
+    list.forEach(c=>{
+      if(c[0]==='CD'||c[0]==='CA'){
+        const side = ord==='left' ? (c[0]==='CD'?'LD':'LA') : (c[0]==='CD'?'RD':'RA');
+        out.push([c[0],c[1],c[2]*0.6]); out.push([side,c[1],c[2]*0.36]);
+      } else out.push(c);
+    });
+    list = out;
+  } else if(ord==='mid'){
+    const sd = SLOT_SIDE[st]; const out=[];
+    list.forEach(c=>{
+      const onSide = (sd==='L' && (c[0]==='LD'||c[0]==='LA')) || (sd==='R' && (c[0]==='RD'||c[0]==='RA'));
+      if(onSide){ out.push([c[0],c[1],c[2]*0.6]); out.push([isD(c[0])?'CD':'CA',c[1],c[2]*0.36]); }
+      else out.push(c);
+    });
+    list = out;
+  }
+  return (_oc[key] = list.map(c=>[SEC.indexOf(c[0]), SKI[c[1]], c[2], c[0]]));
+}
+const NORM = SEC.map(()=>0);
+FORMATIONS['4-4-2'].forEach(st=>CT[st].forEach(c=>{ NORM[SEC.indexOf(c[0])] += c[2]; }));
+
+/* ---------- tilfeldighet ---------- */
+function hashSeed(s){ let h=1779033703^s.length; for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),3432918353); h=h<<13|h>>>19; } h=Math.imul(h^h>>>16,2246822507); h=Math.imul(h^h>>>13,3266489909); return (h^h>>>16)>>>0; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function rngFrom(str){ return mulberry32(hashSeed(String(str))); }
+const ri = (r,a,b)=> a+Math.floor(r()*(b-a+1));
+const pick = (r,arr)=> arr[Math.floor(r()*arr.length)];
+const clamp = (v,a,b)=> v<a?a:v>b?b:v;
+function normal(r){ let u=0,v=0; while(u===0) u=r(); while(v===0) v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function wpick(r, items, wf){ let t=0; const w=items.map(x=>{ const v=Math.max(0,wf(x)); t+=v; return v; }); if(t<=0) return items[Math.floor(r()*items.length)]; let x=r()*t; for(let i=0;i<items.length;i++){ x-=w[i]; if(x<=0) return items[i]; } return items[items.length-1]; }
+function uid(r){ let s='p'; for(let i=0;i<8;i++) s+= '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(r()*36)]; return s; }
+
+/* ---------- spillere ---------- */
+const FIRST = ['Torvald','Eirik','Håkon','Leif','Magne','Bjørn','Anders','Tobias','Viljar','Kaelen','Marko','Davor','Isak','Nils','Odd','Rune','Stian','Joar','Mikkel','Aksel','Tarjei','Sander','Erlend','Even','Halvor','Jostein','Knut','Lasse','Mathis','Olav','Per','Ragnar','Sigurd','Trygve','Ulrik','Vegard','Yngve','Arvid','Bertil','Conrad','Dario','Emil','Fredrik','Gunnar','Henrik','Ivar','Jonas','Kasper','Lukas','Mateo','Nikolai','Oskar','Pavel','Rasmus','Sven','Teodor','Ulf','Viktor','Willem','Ylva','Zeno','Alvar','Brage','Casimir','Dag','Elias','Fabian','Gaute','Hugo','Iver','Jarle','Kjell','Linus','Milan','Njål','Otto','Pelle','Roar','Stefan','Thor','Vidar','Wilhelm','Ásgeir','Benno','Cato','Dmitri','Edvard','Finn','Gustav','Hallvard','Ingmar','Jens','Kristoffer'];
+const LAST = ['Brekke','Nordvik','Aasen','Halvorsen','Skjelbred','Moen','Vinterstad','Kragh','Dahlen','Sævik','Rødal','Fjeldstad','Lunde','Bakken','Tveit','Storli','Heggen','Ulvestad','Grytten','Kvamme','Solheim','Ravndal','Bergsvik','Haugland','Strand','Lie','Myrvold','Eikeland','Vold','Aamodt','Furuseth','Gjerde','Holmen','Isaksen','Jakobsen','Kleven','Langeland','Midtun','Nybø','Overgård','Pedersvik','Quist','Rognstad','Sandvær','Torp','Urdal','Valen','Wold','Yttri','Zander','Andreasen','Balke','Corneliussen','Dybvik','Engen','Fossum','Grønli','Hovland','Ingebrigtsen','Jørgensvik','Krasnic','Lindqvist','Marinovic','Novak','Ostrov','Petrenko','Rinaldi','Sorensen','Tamm','Varga','Weiss','Zelenka','Berglund','Carlsen','Dalgard','Eide','Foss','Garberg','Hagen','Ilstad','Johannessen','Koppang','Lorentzen','Mathisen','Nesse','Opsahl','Paulsrud','Reinholt','Skarpaas','Thoresen','Unneland','Vestby','Waage'];
+const ROLES = ['GK','CB','WB','IM','W','FW'];
+const SQUAD_ROLES = ['GK','GK','CB','CB','CB','CB','WB','WB','WB','IM','IM','IM','IM','IM','W','W','W','FW','FW','FW','FW'];
+const SPEC_W = {
+  GK:null,
+  CB:{hode:.35,kraftfull:.35,rask:.15,teknisk:.10,uforutsigbar:.05},
+  WB:{rask:.40,kraftfull:.20,teknisk:.20,hode:.10,uforutsigbar:.10},
+  IM:{teknisk:.40,kraftfull:.20,uforutsigbar:.20,rask:.10,hode:.10},
+  W:{rask:.40,teknisk:.30,uforutsigbar:.20,hode:.05,kraftfull:.05},
+  FW:{hode:.30,rask:.25,teknisk:.20,kraftfull:.15,uforutsigbar:.10}
+};
+function ageOffset(a){ const t={17:-4.5,18:-3.5,19:-2.6,20:-1.7,21:-1.0,22:-.4,23:0,24:.2,25:.3,26:.4,27:.4,28:.3,29:.1,30:-.2,31:-.6,32:-1.1,33:-1.8,34:-2.5}; return a in t ? t[a] : (a<17?-4.5:-3.2); }
+function randAge(r){ const x=r(); if(x<.15) return ri(r,17,19); if(x<.40) return ri(r,20,23); if(x<.80) return ri(r,24,29); return ri(r,30,34); }
+
+function genPlayer(r, role, ab, age, names){
+  const n = ()=>normal(r)*1.1;
+  const sk=[0,0,0,0,0,0,0];
+  const set=(i,v)=>{ sk[i]=clamp(Math.round(v+n()),0,20); };
+  switch(role){
+    case 'GK': set(0,ab+.8); sk[1]=ri(r,1,5); sk[2]=ri(r,0,3); sk[3]=ri(r,0,4); sk[5]=ri(r,0,2); set(6,ab*.35); break;
+    case 'CB': set(1,ab+.5); set(2,ab*.45); set(3,ab*.35); sk[4]=ri(r,0,3); sk[5]=ri(r,0,3); sk[0]=ri(r,0,1); set(6,ab*.45); break;
+    case 'WB': set(1,ab); set(4,ab*.6); set(2,ab*.45); set(3,ab*.5); sk[5]=ri(r,0,4); set(6,ab*.35); break;
+    case 'IM': set(2,ab+.3); set(3,ab*.85); set(1,ab*.55); sk[4]=ri(r,1,5); set(5,ab*.45); set(6,ab*.5); break;
+    case 'W': set(4,ab+.3); set(3,ab*.7); set(2,ab*.55); set(1,ab*.28); set(5,ab*.5); set(6,ab*.4); break;
+    default: set(5,ab+.5); set(3,ab*.5); set(2,ab*.4); set(4,ab*.3); sk[1]=ri(r,0,3); set(6,ab*.4);
+  }
+  let sp=null; const sw=SPEC_W[role];
+  if(sw && r()<.28){ const keys=Object.keys(sw); sp=wpick(r,keys,k=>sw[k]); }
+  else if(!sw && r()<.05) sp='kraftfull';
+  let name; let tries=0;
+  do { name = pick(r,FIRST)+' '+pick(r,LAST); tries++; } while(names && names.has(name) && tries<40);
+  if(names) names.add(name);
+  const tm=clamp(Math.round(5+normal(r)*2.2),1,10), ld=clamp(Math.round(4.5+normal(r)*2+(age>=27?0.8:0)),1,10);
+  const sy=r()<.65?pick(r,Object.keys(STYLE)):null;
+  const xp=Math.max(0,age-17)*ri(r,0,10)+ri(r,0,15);
+  return {id:uid(r), n:name, a:age, s:sk, pr:[0,0,0,0,0,0,0], f:ri(r,4,6), sp, gl:0, tm, ld, sy, xp, yc:0, sus:0};
+}
+
+const ROLE_SC = {
+  GK:p=>p.s[0],
+  CB:p=>.80*p.s[1]+.20*p.s[2],
+  WB:p=>.60*p.s[1]+.30*p.s[4]+.10*p.s[3],
+  IM:p=>.65*p.s[2]+.25*p.s[3]+.10*p.s[1],
+  W:p=>.60*p.s[4]+.20*p.s[3]+.10*p.s[2]+.10*p.s[5],
+  FW:p=>.70*p.s[5]+.15*p.s[3]+.15*p.s[2]
+};
+function bestRole(p){ let br='IM',bv=-1; for(const k of ROLES){ const v=ROLE_SC[k](p); if(v>bv){bv=v;br=k;} } return br; }
+function ability(p){ let bv=0; for(const k of ROLES){ const v=ROLE_SC[k](p); if(v>bv) bv=v; } return bv; }
+function ageValueF(a){ return a<=21?1.2: a<=23?1.1: a<=28?1.0: a<=30?.82: a<=32?.6: a<=34?.4: .25; }
+function value(p){ const a=Math.max(ability(p),.5); let v=1100*Math.pow(a,2.6)*ageValueF(p.a); if(p.sp) v*=1.08; return Math.max(5000, Math.round(v/1000)*1000); }
+function wage(p){ return Math.max(300, Math.round(value(p)*0.0022/100)*100); }
+
+function genSquad(r, T, names){
+  const players = SQUAD_ROLES.map(role=>{ const age=randAge(r); return genPlayer(r, role, clamp(T+normal(r)*1.7+ageOffset(age),1,19), age, names); });
+  return players;
+}
+function genYouth(r, names){ const role=pick(r,ROLES); return genPlayer(r, role, clamp(4.5+normal(r)*1.5,1,9), 17, names); }
+function genMarketPlayer(r, names){ const role=pick(r,ROLES); const age=ri(r,18,33); const ab=clamp(8.2+normal(r)*2.6+ageOffset(age)*.5,1.5,17.5); return genPlayer(r, role, ab, age, names); }
+
+/* ---------- lag ---------- */
+const TEAM_DEFS = [
+  ['Fjellvik IL','FJE','#C8102E','#FFFFFF'], ['Skagerak FK','SKA','#0B5FA5','#F2C230'], ['Nordhavn United','NOR','#16324F','#7FD1F5'],
+  ['Rødberg SK','RØD','#9E1B1B','#F4E3C1'], ['Vestmark Rovers','VES','#1F7A4D','#FFFFFF'], ['Blåfjell BK','BLÅ','#2B50AA','#FFFFFF'],
+  ['Svartelva FK','SVA','#1A1A1A','#E9B824'], ['Tindra IF','TIN','#6C3A8C','#F1E6F7'], ['Kystbyen AFC','KYS','#0E8A8F','#FFFFFF'],
+  ['Lysfjord Athletic','LYS','#E58B1B','#1D2B3A'], ['Granmoen FK','GRA','#2F5B2E','#E3D26F'], ['Stormarken SK','STO','#4B5563','#FF5A36'],
+  ['Dalsvik City','DAL','#78B7E8','#0F2E52'], ['Ravnheim FK','RAV','#3B2A4F','#D9D9D9']
+];
+function newTeam(i, r, names, T){
+  const d=TEAM_DEFS[i];
+  const t = { i, name:d[0], short:d[1], c:[d[2],d[3]], owner:null, money:START_MONEY, players:genSquad(r,T,names), lineup:null, training:{a:null,b:null}, ai:{}, tl:[], st:{} };
+  t.training = {a:pick(r,['df','mf','ps','sc','wg']), b:null};
+  t.ai = {pref:pick(r,Object.keys(FORMATIONS)), until:0};
+  t.lineup = autoLineup(t);
+  return t;
+}
+
+/* ---------- ratinger ---------- */
+function formMult(p){ let m=0.80+0.035*(p.f||5); if(p.sp==='kraftfull') m=1+(m-1)*0.5; return m; }
+function specMult(p, sec){
+  let m=1;
+  if(p.sp==='rask' && isA(sec)) m*=1.08;
+  else if(p.sp==='teknisk'){ if(sec==='MD') m*=1.07; else if(sec==='CA') m*=1.05; }
+  else if(p.sp==='kraftfull'){ if(isD(sec)) m*=1.07; else if(sec==='MD') m*=1.04; }
+  if(p.sy==='kjemp' && (isD(sec)||sec==='MD')) m*=1.03;
+  return m;
+}
+function slotsOf(lineup){ return FORMATIONS[lineup.f] || FORMATIONS['4-4-2']; }
+function mapById(players){ const m={}; players.forEach(p=>{ m[p.id]=p; }); return m; }
+
+function calcRatings(players, lineup, byId){
+  byId = byId || mapById(players);
+  return calcRatingsSl(byId, slotsOf(lineup), lineup.sl, lineup.o);
+}
+function slotScore(p, st){ let s=0; for(const c of CT[st]) s+=p.s[SKI[c[1]]]*c[2]*(c[0]==='MD'?1.1:1); return s*(0.88+0.024*(p.f||5)); }
+const SLOT_ORDER = {GK:0, FC:1, AL:2, AR:2, WL:3, WR:3, MC:4, DL:5, DR:5, DC:6};
+function lineupQuality(r){ return (r[0]+r[1]+r[2])/3 + r[3]*1.1 + (r[4]+r[5]+r[6])/3*1.1; }
+
+function assignFormation(players, f){
+  const slots=FORMATIONS[f]; const idx=slots.map((s,i)=>i).sort((a,b)=>SLOT_ORDER[slots[a]]-SLOT_ORDER[slots[b]]);
+  const used=new Set(); const sl=new Array(11).fill(null);
+  for(const i of idx){
+    let best=null,bv=-1;
+    for(const p of players){ if(used.has(p.id)) continue; const v=slotScore(p,slots[i]); if(v>bv){bv=v;best=p;} }
+    if(best){ sl[i]=best.id; used.add(best.id); }
+  }
+  return sl;
+}
+function bestTaker(players, sl){ let b=null,bv=-1; const by=mapById(players); sl.forEach(id=>{ const p=by[id]; if(p && p.s[6]>bv){bv=p.s[6];b=p.id;} }); return b; }
+function autoLineup(team){
+  const players=team.players; let best=null,bq=-1; const pref=team.ai&&team.ai.pref;
+  for(const f of Object.keys(FORMATIONS)){
+    const sl=assignFormation(players,f);
+    const lu={f, sl, o:new Array(11).fill('normal'), tk:null};
+    const q=lineupQuality(calcRatings(players,lu))*(f===pref?1.05:1);
+    if(q>bq){bq=q;best=lu;}
+  }
+  best.tk=bestTaker(players,best.sl); best.cap=bestCaptainId(mapById(players),best.sl); best.subs=[];
+  return best;
+}
+/* Gyldig oppstilling? Ellers fyll hull med beste ledige spiller */
+function ensureLineup(team){
+  const lu=team.lineup;
+  const ids=new Set(team.players.map(p=>p.id));
+  if(!lu || !FORMATIONS[lu.f] || !Array.isArray(lu.sl) || lu.sl.length!==11){ team.lineup=autoLineup(team); return true; }
+  let changed=false; const seen=new Set();
+  lu.sl = lu.sl.map(id=>{ if(id && ids.has(id) && !seen.has(id)){ seen.add(id); return id; } changed=true; return null; });
+  if(!lu.o || lu.o.length!==11){ lu.o=new Array(11).fill('normal'); changed=true; }
+  const slots=slotsOf(lu);
+  lu.o = lu.o.map((o,i)=> ordersFor(slots[i]).includes(o)?o:'normal');
+  if(lu.sl.some(x=>!x)){
+    const free=team.players.filter(p=>!seen.has(p.id));
+    slots.map((s,i)=>i).sort((a,b)=>SLOT_ORDER[slots[a]]-SLOT_ORDER[slots[b]]).forEach(i=>{
+      if(lu.sl[i]) return;
+      let best=null,bv=-1; for(const p of free){ if(seen.has(p.id)) continue; const v=slotScore(p,slots[i]); if(v>bv){bv=v;best=p;} }
+      if(best){ lu.sl[i]=best.id; seen.add(best.id); }
+    });
+    changed=true;
+  }
+  if(!lu.tk || !ids.has(lu.tk)){ lu.tk=bestTaker(team.players,lu.sl); changed=true; }
+  if(!lu.cap || !ids.has(lu.cap)){ lu.cap=bestCaptainId(mapById(team.players),lu.sl); changed=true; }
+  const subs=Array.isArray(lu.subs)?lu.subs:[]; const okSubs=subs.filter(x=>x&&ids.has(x.out)&&ids.has(x.inn)&&x.out!==x.inn).slice(0,5);
+  if(!Array.isArray(lu.subs) || okSubs.length!==subs.length){ lu.subs=okSubs; changed=true; }
+  return changed;
+}
+function teamStrength(team){ ensureLineup(team); return lineupQuality(calcRatings(team.players, team.lineup)); }
+
+/* ---------- trening ---------- */
+const REL = {
+  kp:{GK:1,CB:.04,WB:.04,IM:.04,W:.04,FW:.04},
+  df:{CB:1,WB:.9,IM:.35,W:.25,FW:.12,GK:.15},
+  mf:{IM:1,W:.5,FW:.35,WB:.35,CB:.3,GK:.08},
+  ps:{IM:1,W:.8,FW:.6,WB:.6,CB:.45,GK:.12},
+  wg:{W:1,WB:.65,IM:.2,FW:.28,CB:.08,GK:.04},
+  sc:{FW:1,W:.45,IM:.3,WB:.1,CB:.08,GK:.03},
+  sp:{IM:.65,FW:.6,W:.6,WB:.5,CB:.5,GK:.3}
+};
+function cost(level){ return 0.55*Math.pow(1.16, level); }
+function ageTrainF(a){ return a<=17?2.2: a===18?2.05: a===19?1.85: a===20?1.65: a===21?1.45: a===22?1.28: a===23?1.12: a<=26?1: a===27?.96: a===28?.92: a===29?.88: a===30?.82: a<=32?.70: .55; }
+function lineupRoles(team){ const m={}; const slots=slotsOf(team.lineup); team.lineup.sl.forEach((id,i)=>{ if(id) m[id]=SLOT_ROLE[slots[i]]; }); return m; }
+function trainShare(team){ const tr=team.training||{}; const ks=[tr.a,tr.b].filter(Boolean); return {ks, share: ks.length===2?0.6:1}; }
+function trainingRate(p, k, role, inLine, share){ return REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
+function trainTeam(team, r, week){
+  const {ks,share}=trainShare(team); if(!ks.length) return;
+  ensureLineup(team);
+  const roles=lineupRoles(team);
+  for(const p of team.players){
+    const inLine=!!roles[p.id]; const role=roles[p.id]||bestRole(p);
+    for(const k of ks){
+      const i=SKI[k]; if(p.s[i]>=20) continue;
+      p.pr[i] += trainingRate(p,k,role,inLine,share)*(0.85+r()*0.3);
+      let up=0;
+      while(p.s[i]<20 && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
+      if(p.s[i]>=20) p.pr[i]=0;
+      if(up) team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1});
+    }
+  }
+  team.tl = team.tl.slice(0,24);
+}
+const DECLINE_W = {kp:.5, df:1, mf:.8, ps:.6, wg:1.3, sc:1, sp:.35};
+function agingDecline(team, r, week){
+  for(const p of team.players){
+    if(p.a<30) continue;
+    const base=Math.min(0.09, 0.012*(p.a-29));
+    SK.forEach((k,i)=>{
+      if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); }
+    });
+  }
+  team.tl = team.tl.slice(0,24);
+}
+function formDrift(team, r){
+  for(const p of team.players){
+    const x=r(); let step = x<.25?-1: x>.75?1:0;
+    if(p.f>=7 && r()<.3) step=-1; if(p.f<=3 && r()<.3) step=1;
+    p.f=clamp((p.f||5)+step,1,8);
+  }
+}
+function aiPlan(team, r, week){
+  if(team.ai && team.ai.until>week) return;
+  const pool=['df','mf','ps','sc','wg','df','mf','sc','kp','sp'];
+  const a=pick(r,pool); let b=pick(r,pool); let g=0; while(b===a && g++<10) b=pick(r,pool);
+  team.training={a, b: r()<.55?b:null};
+  team.ai={pref:(team.ai&&team.ai.pref)||pick(r,Object.keys(FORMATIONS)), until: week+ri(r,3,6)};
+}
+
+/* ---------- økonomi ---------- */
+function weeklyFinance(team){
+  const w=team.players.reduce((s,p)=>s+wage(p),0);
+  team.money += SPONSOR_WEEK - w;
+  return {income:SPONSOR_WEEK, wages:w};
+}
+
+/* ---------- kampmotor ---------- */
+/* ---------- personlighet, kaptein, kort ---------- */
+const STYLE = {lag:'Lagspiller', ind:'Individualist', kjemp:'Kjemper', fair:'Fair spiller'};
+const STYLE_INFO = {
+  lag:'Spiller ofte fram medspillere og legger opp til flere mål.',
+  ind:'Går ofte for avslutning selv, men legger sjeldnere opp til andre.',
+  kjemp:'Hardtarbeidende i forsvar og på midtbanen, men tar oftere frispark.',
+  fair:'Spiller ryddig og får sjeldnere kort.'
+};
+const tmOf = p => p.tm==null?5:p.tm;
+const ldOf = p => p.ld==null?5:p.ld;
+function expLevel(p){ return clamp((p.xp||0)/10,0,10); }
+function capScore(p){ return clamp((0.55*ldOf(p)+0.45*expLevel(p))/10,0,1); }
+function tmLabel(v){ return v<=3?'Rolig':v<=6?'Balansert':v<=8?'Hissig':'Temperamentsfull'; }
+function ldLabel(v){ return v<=3?'Svak leder':v<=6?'Middels leder':v<=8?'God leder':'Født leder'; }
+function expLabel(l){ return l<2?'Uerfaren':l<5?'Litt erfaren':l<8?'Erfaren':'Veteran'; }
+function capLabel(p){ const c=capScore(p); return c<.3?'Dårlig egnet':c<.5?'Passe egnet':c<.7?'Godt egnet':'Svært godt egnet'; }
+function bestCaptainId(by, sl){ let b=null,bv=-1; sl.forEach(id=>{ const p=by[id]; if(p){ const v=capScore(p); if(v>bv){bv=v;b=p.id;} } }); return b; }
+
+/* AI-lagenes bytteplan: søk offensivt ved tap, sikre ved ledelse */
+function aiSubs(team, lu, by, sus){
+  const inXI=new Set(lu.sl); const bench=team.players.filter(p=>!inXI.has(p.id) && !(sus&&sus.has(p.id)));
+  const slots=slotsOf(lu); const subs=[]; const usedIn=new Set(), usedOut=new Set();
+  const weakest=(types)=>{ let bi=-1,bv=1e9; slots.forEach((st,i)=>{ if(!types.includes(st)||!lu.sl[i]||usedOut.has(lu.sl[i])) return; const v=slotScore(by[lu.sl[i]],st); if(v<bv){bv=v;bi=i;} }); return bi; };
+  const bestIn=(st)=>{ let b=null,bv=-1; bench.forEach(p=>{ if(usedIn.has(p.id)) return; const v=slotScore(p,st); if(v>bv){bv=v;b=p;} }); return b; };
+  let i=weakest(['DC']); let inn=bestIn('FC');
+  if(i>=0 && inn){ subs.push({m:60,c:'trail',out:lu.sl[i],inn:inn.id,as:'FC'}); usedOut.add(lu.sl[i]); usedIn.add(inn.id); }
+  i=weakest(['FC','AL','AR']); inn=bestIn('DC');
+  if(i>=0 && inn){ subs.push({m:70,c:'lead',out:lu.sl[i],inn:inn.id,as:'DC'}); usedOut.add(lu.sl[i]); usedIn.add(inn.id); }
+  let bg=0,bi=-1,bp=null;
+  slots.forEach((st,j)=>{ if(st==='GK'||!lu.sl[j]||usedOut.has(lu.sl[j])) return; bench.forEach(p=>{ if(usedIn.has(p.id)) return; const g=slotScore(p,st)-slotScore(by[lu.sl[j]],st); if(g>bg){bg=g;bi=j;bp=p;} }); });
+  if(bi>=0 && bg>0.8) subs.push({m:65,c:'always',out:lu.sl[bi],inn:bp.id,as:null});
+  return subs;
+}
+/* Gyldig oppstilling for en kamp: erstatt utestengte, sjekk kaptein, legg til AI-bytter */
+function effLineup(team){
+  ensureLineup(team);
+  const lu=JSON.parse(JSON.stringify(team.lineup)); const by=mapById(team.players);
+  const sus=new Set(team.players.filter(p=>(p.sus||0)>0).map(p=>p.id));
+  const slots=slotsOf(lu); const taken=new Set(lu.sl.filter(id=>id&&!sus.has(id)));
+  slots.map((s,i)=>i).sort((a,b)=>SLOT_ORDER[slots[a]]-SLOT_ORDER[slots[b]]).forEach(i=>{
+    if(lu.sl[i] && !sus.has(lu.sl[i])) return;
+    let best=null,bv=-1; for(const p of team.players){ if(taken.has(p.id)||sus.has(p.id)) continue; const v=slotScore(p,slots[i]); if(v>bv){bv=v;best=p;} }
+    lu.sl[i]=best?best.id:null; if(best){ taken.add(best.id); lu.o[i]='normal'; }
+  });
+  if(!lu.cap || !lu.sl.includes(lu.cap)) lu.cap=bestCaptainId(by,lu.sl);
+  if(!lu.tk || !lu.sl.includes(lu.tk)) lu.tk=bestTaker(team.players,lu.sl);
+  if(!team.owner) lu.subs=aiSubs(team,lu,by,sus);
+  return {lu,by,sus};
+}
+
+/* ---------- kampsimulering i tidsvinduer (5 min) med bytter, kort og kaptein ---------- */
+const SHOOT_W = {FC:1, AL:.5, AR:.5, WL:.35, WR:.35, MC:.22, DL:.04, DR:.04, DC:.04, GK:0};
+const ASSIST_W = {MC:1, WL:.9, WR:.9, AL:.9, AR:.9, FC:.5, DL:.35, DR:.35, DC:.15, GK:0};
+const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, FC:.6};
+const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
+const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
+function fm(p){ return formMult(p); }
+function calcRatingsSl(by, types, sl, o){
+  const r=[0,0,0,0,0,0,0];
+  types.forEach((st,i)=>{
+    const p=by[sl[i]]; if(!p) return; const f=formMult(p);
+    for(const c of orderedContribs(st, (o&&o[i])||'normal')) r[c[0]] += p.s[c[1]]*c[2]*f*specMult(p,c[3]);
+  });
+  return r.map((v,k)=>v/NORM[k]);
+}
+function mkSide(team, home, r){
+  const {lu,by,sus}=effLineup(team);
+  return {team, by, types:slotsOf(lu).slice(), sl:lu.sl.slice(), o:lu.o.slice(), f:lu.f, home,
+    mult:home?1.06:1, noise:[0,0,0,0,0,0,0].map(()=>1+normal(r)*0.035),
+    capId:lu.cap, tkId:lu.tk, subs:(lu.subs||[]).slice(0,5).map(s=>({...s,done:false})), subsLeft:5,
+    yel:{}, played:new Set(lu.sl.filter(Boolean)), sus, capTalk:false, ratSum:0};
+}
+function onField(side){ const o=[]; side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(p) o.push({st, p, ord:(side.o&&side.o[i])||'normal', i}); }); return o; }
+function capInfo(side){
+  let p=side.by[side.capId]; let k=1;
+  if(!p || !side.sl.includes(p.id)){ p=null; let bv=-1; side.sl.forEach(id=>{ const q=side.by[id]; if(q){ const v=capScore(q); if(v>bv){bv=v;p=q;} } }); k=.8; }
+  return {p, q:p?capScore(p)*k:0};
+}
+function sideRat(side, deficit){
+  const rat=calcRatingsSl(side.by, side.types, side.sl, side.o);
+  const ci=capInfo(side); const cf=1+ci.q*(0.02+(deficit>=2?0.045:deficit===1?0.03:0));
+  return rat.map((v,k)=>v*side.mult*side.noise[k]*cf);
+}
+function mkCtx(side, rat){
+  const xi=onField(side); const gk=xi.find(x=>x.st==='GK');
+  return {team:side.team, side, rat, xi, gk:gk?gk.p:null,
+    tk: side.by[side.tkId] && side.sl.includes(side.tkId) ? side.by[side.tkId] : bestTakerP(xi),
+    hodeAtk: Math.min(3, xi.filter(x=>x.p.sp==='hode' && x.st!=='GK').length),
+    hodeDef: Math.min(3, xi.filter(x=>x.p.sp==='hode' && (x.st==='DC'||x.st==='DL'||x.st==='DR')).length),
+    quick: Math.min(2, xi.filter(x=>x.p.sp==='rask').length),
+    unp: xi.filter(x=>x.p.sp==='uforutsigbar').slice(0,2)};
+}
+function bestTakerP(xi){ let b=null,bv=-1; xi.forEach(x=>{ if(x.p.s[6]>bv){bv=x.p.s[6];b=x.p;} }); return b; }
+function shootW(x){ return SHOOT_W[x.st]*(x.p.s[5]+1)*(x.p.sy==='ind'?1.25:1); }
+function pickShooter(r, T, not){ return wpick(r, T.xi.filter(x=>x.p!==not), shootW); }
+function pickAssist(r, T, not){ return wpick(r, T.xi.filter(x=>x.p!==not), x=>ASSIST_W[x.st]*(x.p.s[3]+1)*(x.p.sy==='lag'?1.35:x.p.sy==='ind'?.85:1)); }
+
+/* ---------- kommentar ---------- */
+const GOAL_KINDS = {g:1, s:1, u:1, b:1};
+const P = (r,arr)=>arr[Math.floor(r()*arr.length)];
+function buildUp(r, sec, S, A){
+  const side = sec===0?'venstre':sec===2?'høyre':'midten';
+  let s;
+  if(A){
+    if(sec===1) s=P(r,[`${A} finner ${S} sentralt med en vakker pasning mellom linjene.`,`${A} stikker ballen i dybden, og ${S} er på den!`,`${A} sender ballen inn i midten til ${S}.`,`Fin kombinasjon i midten mellom ${A} og ${S}.`]);
+    else s=P(r,[`${A} vrir spillet mot ${side} med god pasning opp til ${S} som setter fart fremover.`,`${A} slår ballen ut på ${side} kanten til ${S}.`,`${S} får ballen på ${side} siden etter en lur pasning fra ${A}.`,`Angrep ned ${side} kanten! ${A} spiller opp ${S}.`]);
+  } else {
+    s=P(r,[`${S} vinner ballen og drar av gårde mot mål.`,`${S} tar saken i egne hender og går fremover.`,`${S} får ballen og setter fart ${sec===1?'rett mot mål':'ned '+side+' kanten'}.`]);
+  }
+  const d=r();
+  if(d<.35) s+=` ${S} runder en spiller.`+(r()<.45?' Han runder en til!':'');
+  else if(d<.55) s+=` ${S} lurer forsvaret med en finte.`;
+  return s;
+}
+const shotLine=(r,S)=>P(r,['Fyrer av et skudd.',`${S} skyter!`,`${S} prøver seg!`,`${S} tar sats og avslutter.`]);
+function goalLine(r,S,K){
+  return P(r,[`Limer ballen i krysset! ${K} er sjanseløs! For en scoring!`,`Rett i hjørnet! ${K} er sjanseløs! For et angrep og for en herlig scoring!`,`Ballen går i nettet! ${S} jubler!`,`${K} får ikke tak i den. Mål!`,`Ballen suser i mål, og ${K} står igjen uten svar!`]);
+}
+function missLine(r,kind,K,S){
+  if(kind==='sv') return P(r,[`${K} får fingrene på ballen og tar den!`,`${K} redder i full strekk!`,`Flott redning av ${K}!`]);
+  if(kind==='ms') return P(r,['Så nær, men ballen går utenfor.','Ballen går rett over mål.','Forbi stolpen.']);
+  if(kind==='bl') return P(r,['Forsvaret kaster seg i veien og blokkerer.','Skuddet blir blokkert i siste liten.']);
+  return P(r,['Ballen smeller i stolpen!','Ballen treffer tverrliggeren! Så nær!']);
+}
+function fillerText(r, X, Y){
+  const pl=T=>T.xi.filter(x=>x.st!=='GK'); const xs=pl(X); const a=P(r,xs).p.n, b=P(r,xs.filter(x=>x.p.n!==a)).p.n, c=P(r,pl(Y)).p.n;
+  return P(r,[`${a} og ${b} holder ballen godt på midtbanen.`,`${X.team.name} presser høyt og vinner ballen tilbake.`,`${c} stopper et lovende angrep for ${Y.team.name}.`,`${a} prøver en lang ball, men ${c} er våken.`,`Rolig oppbygging hos ${X.team.name}.`,`${b} tar et løp, men blir stoppet like utenfor feltet.`,`Det er hard duell på midtbanen mellom ${a} og ${c}.`,`${X.team.name} holder ballen og leter etter en åpning.`]);
+}
+function labelOf(t, L1){
+  const L2s=L1+15;
+  if(t<L1){ const m=Math.max(1,Math.ceil(t)); return m>45?`45+${m-45}'`:`${m}'`; }
+  const tt=t-L2s+45; const m=Math.max(46,Math.ceil(tt)); return m>90?`90+${m-90}'`:`${m}'`;
+}
+
+function simulateMatch(Ht, At, r){
+  const sides=[mkSide(Ht,true,r), mkSide(At,false,r)];
+  const L1=45+ri(r,1,4), L2=45+ri(r,2,6), Ttot=L1+L2;
+  const ev=[]; const mirror={0:2,1:1,2:0}; const cards=[];
+  const sr=v=>{ const f=Math.floor(v); return f+(r()<v-f?1:0); };
+  const toReal=x=> x<L1 ? Math.max(0.3,x) : L1+15+(x-L1);
+  const gm=x=> x<L1 ? Math.min(x,44.9) : 45+(x-L1);
+  const sc=[0,0]; const SK_=['h','a'];
+  const push=(x,e)=>{ e.t=Math.round(toReal(x)*10)/10; ev.push(e); if(GOAL_KINDS[e.k]) sc[e.s==='h'?0:1]++; };
+  const wins=[]; for(let x=0;x<L1;x+=5) wins.push([x,Math.min(L1,x+5)]); for(let x=L1;x<Ttot;x+=5) wins.push([x,Math.min(Ttot,x+5)]);
+  const kpName=Y=>Y.gk?Y.gk.n:'keeperen';
+  let shots=[0,0], shareSum=0, firstRat=null;
+
+  function attackOnce(X, Y, side, x, R){
+    const secW=[X.rat[4],X.rat[5],X.rat[6]];
+    const s=wpick(r,[0,1,2],i=>secW[i]*secW[i]);
+    const att=X.rat[4+s], def=Y.rat[mirror[s]];
+    const Rr=Math.pow(att,1.6)/(Math.pow(att,1.6)+Math.pow(def,1.6));
+    const pShot=Math.min(0.75, 0.5*Math.pow(Rr,1.2));
+    if(r()>=pShot) return;
+    shots[side==='h'?0:1]++;
+    const sh=pickShooter(r,X);
+    const shv=sh.p.s[5]*fm(sh.p)*(sh.p.sp==='rask'?1.03:1);
+    const kv=(Y.gk?Y.gk.s[0]*fm(Y.gk):2);
+    const q=shv*shv/(shv*shv+kv*kv+0.01);
+    let pg=0.12+0.38*q;
+    if(s!==1){ pg*=0.92; if(sh.p.sp==='hode') pg+=0.06; }
+    const asst = r()<0.72 ? pickAssist(r,X,sh.p) : null;
+    const S=sh.p.n, K=kpName(Y);
+    const base=buildUp(r,s,S,asst?asst.p.n:null)+' '+shotLine(r,S);
+    if(r()<pg) push(x+r()*5,{k:'g', s:side, p:S, i:sh.p.id, a:asst?asst.p.n:null, tx:base+' '+goalLine(r,S,K)});
+    else { const o=r(); const kind=o<.55?'sv':o<.77?'ms':o<.9?'bl':'po'; push(x+r()*5,{k:kind, s:side, p:S, tx:base+' '+missLine(r,kind,K,S)}); }
+  }
+  function setPiece(X, Y, side, x, free){
+    const sp=X.tk?X.tk.s[6]*fm(X.tk):0;
+    const p=clamp(0.85*(0.025+0.11*(sp/20)+0.014*X.hodeAtk-0.008*Y.hodeDef), 0.01, 0.3);
+    shots[side==='h'?0:1]++;
+    const T=X.tk?X.tk.n:'en spiller'; const corner=!free;
+    const intro=corner?`Hjørnespark til ${X.team.name}. ${T} slår ballen inn i feltet.`:`Frispark til ${X.team.name} i god posisjon. ${T} står klar over ballen.`;
+    if(r()<p){
+      const cand=X.xi.filter(z=>z.st!=='GK'); const w=wpick(r,cand,z=>(z.p.sp==='hode'?3:1)*(z.p.s[5]+z.p.s[1]*.5+2));
+      const S=w.p.n; const hd=w.p.sp==='hode'||r()<.5;
+      const fin = (!corner && w.p===X.tk) ? `${S} sparker ballen rett i mål! ${kpName(Y)} står helt stille.` : hd ? `${S} hever seg høyest og nikker ballen i mål!` : `${S} får ballen og dundrer den i mål!`;
+      push(x+r()*5,{k:'s', s:side, p:S, i:w.p.id, a:X.tk?X.tk.n:null, tx:intro+' '+fin+' Så deilig!'});
+    } else push(x+r()*5,{k:'sn', s:side, tx:intro+' '+P(r,['Forsvaret klarerer til slutt.',`${kpName(Y)} plukker ballen ned.`,'Ballen går rett over mål.','Ingenting kommer ut av det.'])});
+  }
+  function sendOff(side, X, p, x){
+    const i=side.sl.indexOf(p.id); if(i<0) return;
+    const wasGk=side.types[i]==='GK'; side.sl[i]=null;
+    if(wasGk){
+      const cand=(side.subsLeft>0 ? Object.values(side.by).filter(q=>!side.played.has(q.id)&&!side.sus.has(q.id)) : onField(side).map(z=>z.p)).sort((a,b)=>b.s[0]-a.s[0]);
+      const kp=cand[0];
+      if(kp){
+        if(side.subsLeft>0 && !side.sl.includes(kp.id)){ side.subsLeft--; side.played.add(kp.id); side.sl[i]=kp.id; side.o[i]='normal'; }
+        else { const j=side.sl.indexOf(kp.id); if(j>=0){ side.sl[j]=null; side.sl[i]=kp.id; side.o[i]='normal'; } }
+        // laget spiller på ti: ta bort den svakeste utespilleren hvis begge plasser er fylt
+        if(side.sl.filter(Boolean).length>10){ let wi=-1,wv=1e9; side.types.forEach((st,j)=>{ if(st==='GK'||!side.sl[j]) return; const v=slotScore(side.by[side.sl[j]],st); if(v<wv){wv=v;wi=j;} }); if(wi>=0) side.sl[wi]=null; }
+      }
+    }
+  }
+  function foul(X, Y, sideCode, x, Xs, Ys){
+    const w=wpick(r,X.xi,z=>FOUL_W[z.st]*(tmOf(z.p)+2)*(z.p.sy==='kjemp'?1.35:z.p.sy==='fair'?.6:1));
+    const victim=P(r,Y.xi.filter(z=>z.st!=='GK').length?Y.xi.filter(z=>z.st!=='GK'):Y.xi).p;
+    const p=w.p; const xx=x+r()*5;
+    push(xx,{k:'fl', s:sideCode, p:p.n, tx:P(r,[`${p.n} kommer for sent inn mot ${victim.n}. Frispark til ${Y.team.name}.`,`${p.n} tar ${victim.n} hardt. Dommeren blåser for frispark.`,`Det blir frispark etter en dum takling fra ${p.n} på ${victim.n}.`])});
+    const tm=tmOf(p); const fair=p.sy==='fair';
+    const pRed=0.0004+0.0002*tm; const pY=(0.05+0.03*tm)*(fair?0.7:1)*(Xs.yel[p.id]?0.4:1);
+    let red=false, yel=false;
+    if(r()<pRed){ red=true; push(xx+0.05,{k:'rc', s:sideCode, p:p.n, i:p.id, tx:`Rødt kort! ${p.n} går i bakken og dommeren viser ham rødt kort for en grov takling. ${X.team.name} må spille med ti mann!`}); cards.push({i:p.id,s:sideCode,k:'r'}); }
+    else if(r()<pY){
+      if(Xs.yel[p.id]){ red=true; push(xx+0.05,{k:'rc', s:sideCode, p:p.n, i:p.id, tx:`Andre gule kort for ${p.n}, og dermed rødt! ${X.team.name} må spille med ti mann.`}); const ci=cards.findIndex(c=>c.i===p.id&&c.k==='y'); if(ci>=0) cards.splice(ci,1); cards.push({i:p.id,s:sideCode,k:'r'}); }
+      else { yel=true; Xs.yel[p.id]=1; push(xx+0.05,{k:'yc', s:sideCode, p:p.n, i:p.id, tx:`Gult kort til ${p.n}.`}); cards.push({i:p.id,s:sideCode,k:'y'}); }
+    }
+    if(red) sendOff(Xs,X,p,x);
+    if(!red && r()<0.35) return 'fk';
+    return red?'red':null;
+  }
+  function wild(X, Y, side, x, frac){
+    for(const u of X.unp){
+      if(r()>=0.4*frac) continue;
+      const ps=u.p.s[3]; const pos=clamp(0.35+0.04*ps,0.35,0.92);
+      const oside=side==='h'?'a':'h';
+      if(r()<pos){
+        const rc=pickShooter(r,X,u.p); if(!rc) continue;
+        const K=kpName(Y);
+        if(r()<0.8){
+          const shv=rc.p.s[5]*fm(rc.p); const kv=(Y.gk?Y.gk.s[0]*fm(Y.gk):2); const q=shv*shv/(shv*shv+kv*kv+0.01);
+          const intro=`${u.p.n} ser en glipp i forsvaret og slår en genial gjennombruddspassning! ${rc.p.n} er helt alene med ${K}.`;
+          if(r()<clamp(0.30+0.45*q,0.3,0.8)) push(x+r()*5,{k:'u', s:side, p:rc.p.n, i:rc.p.id, a:u.p.n, tx:intro+' Han holder roen og setter ballen i mål! For en pasning!'});
+          else push(x+r()*5,{k:'un', s:side, p:rc.p.n, tx:intro+' '+P(r,[`${K} redder fantastisk!`,`Men ${K} kommer ut og stenger vinkelen.`,`Skuddet går like utenfor!`])});
+        } else {
+          const intro=`${u.p.n} gjør noe helt uventet! Han dribler to mann og slår en finte.`;
+          if(r()<0.6) push(x+r()*5,{k:'u', s:side, p:u.p.n, i:u.p.id, a:null, tx:intro+' Så dundrer han ballen i mål!'});
+          else push(x+r()*5,{k:'un', s:side, p:u.p.n, tx:intro+' '+P(r,['Men skuddet går like utenfor.',`Men ${K} gjør en flott redning.`])});
+        }
+      } else {
+        const sh=pickShooter(r,Y); if(!sh) continue;
+        if(r()<0.45) push(x+r()*5,{k:'b', s:oside, p:sh.p.n, i:sh.p.id, a:null, tx:`${u.p.n} slurver med ballen rett foran eget mål! ${sh.p.n} er framme og sender den i mål!`});
+        else push(x+r()*5,{k:'un', s:side, p:u.p.n, tx:`${u.p.n} mister ballen i en farlig sone, men ${Y.team.name} klarer ikke å utnytte det.`});
+      }
+    }
+  }
+  function doSubs(side, x, deficit, sideCode){
+    for(const sb of side.subs){
+      if(sb.done || side.subsLeft<=0) continue;
+      if(gm(x)<sb.m) continue;
+      const c=sb.c||'always';
+      if(c==='trail' && deficit<=0) continue; if(c==='lead' && deficit>=0) continue; if(c==='draw' && deficit!==0) continue;
+      const i=side.sl.indexOf(sb.out); const inn=side.by[sb.inn];
+      if(i<0 || !inn || side.played.has(sb.inn) || side.sus.has(sb.inn)){ if(i<0||!inn||side.played.has(sb.inn)||side.sus.has(sb.inn)) sb.done=true; continue; }
+      sb.done=true; side.subsLeft--;
+      const outP=side.by[sb.out];
+      side.sl[i]=sb.inn; side.played.add(sb.inn);
+      let moved='';
+      if(sb.as && sb.as!==side.types[i] && SUB_SLOTS.includes(sb.as) && side.types[i]!=='GK'){ side.types[i]=sb.as; moved=` ${inn.n} spiller nå som ${SLOT_NAME[sb.as].toLowerCase()}.`; }
+      if(!ordersFor(side.types[i]).includes(side.o[i])) side.o[i]='normal'; else side.o[i]='normal';
+      if(side.capId===sb.out) { /* kapteinsbind overtas av beste på banen via capInfo */ }
+      const why=c==='trail'?' Treneren satser offensivt.':c==='lead'?' Treneren sikrer ledelsen.':'';
+      push(x,{k:'sub', s:sideCode, p:inn.n, i:inn.id, tx:`Bytte for ${side.team.name}: ${inn.n} kommer inn for ${outP?outP.n:'en spiller'}.${moved}${why}`});
+    }
+  }
+
+  for(let wi=0; wi<wins.length; wi++){
+    const [x0,x1]=wins[wi]; const w=x1-x0; const frac=w/Ttot;
+    const diff=[sc[0]-sc[1], sc[1]-sc[0]];
+    doSubs(sides[0],x0,diff[0],'h'); doSubs(sides[1],x0,diff[1],'a');
+    const rat=[sideRat(sides[0],Math.max(0,-diff[0])), sideRat(sides[1],Math.max(0,-diff[1]))];
+    if(!firstRat) firstRat=rat.map(a=>a.slice());
+    const C=[mkCtx(sides[0],rat[0]), mkCtx(sides[1],rat[1])];
+    // kapteinen samler laget
+    for(let k=0;k<2;k++){ const s=sides[k]; if(diff[k]<0 && !s.capTalk){ const ci=capInfo(s); if(ci.p && ci.q>=0.4){ s.capTalk=true; push(x0+0.05,{k:'c', s:SK_[k], p:ci.p.n, tx:`${ci.p.n} samler laget og roper at nå må ${s.team.name} sette fart! Kapteinen drar laget fremover.`}); } } }
+    const mh=rat[0][3], ma=rat[1][3];
+    let shareH = Math.pow(mh,1.6)/(Math.pow(mh,1.6)+Math.pow(ma,1.6)); shareH = 0.5+(shareH-0.5)*0.9; shareSum+=shareH*w;
+    const nH=sr(44*shareH*(1+0.03*C[0].quick)*frac), nA=sr(44*(1-shareH)*(1+0.03*C[1].quick)*frac);
+    for(let k=0;k<nH;k++) attackOnce(C[0],C[1],'h',x0);
+    for(let k=0;k<nA;k++) attackOnce(C[1],C[0],'a',x0);
+    // hjørnespark og frispark fra spill
+    for(let k=0;k<2;k++){ const n=sr(1.7*frac); for(let j=0;j<n;j++){ const free=r()<.3; setPiece(C[k],C[1-k],SK_[k],x0,free); } }
+    // frispark og kort
+    for(let k=0;k<2;k++){
+      const n=sr(3.6*frac);
+      for(let j=0;j<n;j++){ const res=foul(C[k],C[1-k],SK_[k],x0,sides[k],sides[1-k]); if(res==='fk') setPiece(C[1-k],C[k],SK_[1-k],x0+0.1,true); }
+    }
+    wild(C[0],C[1],'h',x0,frac); wild(C[1],C[0],'a',x0,frac);
+    const nf=sr(8*frac); for(let j=0;j<nf;j++){ const h=r()<.5; const X=h?C[0]:C[1], Y=h?C[1]:C[0]; if(X.xi.length>2&&Y.xi.length>2) push(x0+r()*w,{k:'f', s:h?'h':'a', tx:fillerText(r,X,Y)}); }
+  }
+  const total=L1+15+L2;
+  const st=(t,tx)=>ev.push({k:'st', s:'', t, tx});
+  st(0,`Dommeren blåser i gang kampen mellom ${Ht.name} og ${At.name}!`);
+  st(44.5,`Dommeren varsler ${L1-45} ${L1-45===1?'minutt':'minutter'} tilleggstid.`);
+  st(L1,'Pause!');
+  st(L1+15,'Andre omgang er i gang.');
+  st(L1+15+44.5,`Dommeren varsler ${L2-45} minutter tilleggstid.`);
+  st(total,'Dommeren blåser av kampen!');
+  ev.sort((a,b)=>a.t-b.t);
+  let hg=0, ag=0;
+  ev.forEach(e=>{
+    e.lab = e.k==='st' ? '' : labelOf(e.t, L1);
+    if(GOAL_KINDS[e.k]){ if(e.s==='h') hg++; else ag++; e.sc=[hg,ag]; }
+    if(e.k==='st' && e.tx==='Pause!') e.tx=`Pause! Stillingen er ${hg}–${ag}.`;
+    if(e.k==='st' && e.tx==='Dommeren blåser av kampen!') e.tx=`Dommeren blåser av kampen! Sluttresultat ${Ht.name} ${hg}–${ag} ${At.name}.`;
+  });
+  const round1=a=>a.map(v=>Math.round(v*10)/10);
+  const shareH=shareSum/Ttot;
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+}
+
+/* ---------- terminliste ---------- */
+function makeFixtures(season){
+  const r=rngFrom('fx-'+season); let arr=[]; for(let i=0;i<N_TEAMS;i++) arr.push(i);
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  const first=[];
+  for(let rd=0;rd<N_TEAMS-1;rd++){
+    const pairs=[];
+    for(let i=0;i<N_TEAMS/2;i++){ const a=arr[i], b=arr[N_TEAMS-1-i]; pairs.push(((rd+i)%2===0)?[a,b]:[b,a]); }
+    first.push(pairs);
+    arr=[arr[0], arr[N_TEAMS-1], ...arr.slice(1,N_TEAMS-1)];
+  }
+  const second=first.map(rd=>rd.map(p=>[p[1],p[0]]));
+  return first.concat(second);
+}
+
+/* ---------- tid (Europe/Oslo) ---------- */
+const TZ='Europe/Oslo';
+const _fmt = new Intl.DateTimeFormat('en-GB',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+function osloParts(ms){ const o={}; _fmt.formatToParts(new Date(ms)).forEach(p=>{ if(p.type!=='literal') o[p.type]=+p.value; }); return o; }
+function osloOffset(ms){ const p=osloParts(ms); return Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute,p.second)-Math.floor(ms/1000)*1000; }
+function osloToUtc(y,m,d,h,mi){ const guess=Date.UTC(y,m-1,d,h,mi); let ts=guess-osloOffset(guess); ts=guess-osloOffset(ts); return ts; }
+function mondayOf(ms){ const p=osloParts(ms); const dt=new Date(Date.UTC(p.year,p.month-1,p.day)); const dow=(dt.getUTCDay()+6)%7; dt.setUTCDate(dt.getUTCDate()-dow); return {y:dt.getUTCFullYear(), m:dt.getUTCMonth()+1, d:dt.getUTCDate()}; }
+const KICKOFF_H=18;
+function slotTime(anchor, g){
+  const wk=Math.floor(g/3), day=MATCH_DAYS[g%3];
+  const dt=new Date(Date.UTC(anchor.y,anchor.m-1,anchor.d+7*wk+day));
+  return osloToUtc(dt.getUTCFullYear(), dt.getUTCMonth()+1, dt.getUTCDate(), KICKOFF_H, 0);
+}
+function firstSlotAfter(anchor, ms){ let g=0; while(slotTime(anchor,g)<=ms) g++; return g; }
+
+/* ---------- liga ---------- */
+function emptyTable(){ const t=[]; for(let i=0;i<N_TEAMS;i++) t.push([0,0,0,0,0,0,0]); return t; } // [spilt,v,u,t,mål for,mål mot,poeng]
+function tableOrder(tb){
+  return tb.map((row,i)=>({t:i,p:row[0],w:row[1],d:row[2],l:row[3],gf:row[4],ga:row[5],pts:row[6],gd:row[4]-row[5]}))
+    .sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.t-b.t);
+}
+function createLeague(now){
+  const r=rngFrom('liga-'+now); const names=new Set();
+  const teams=[]; for(let i=0;i<N_TEAMS;i++){ const T=clamp(8.6+normal(r)*0.7,7.0,10.2); teams.push(newTeam(i,r,names,T)); }
+  { const t0=teams[0]; const jd=t0.players.filter(p=>bestRole(p)==='IM').sort((a,b)=>ability(b)-ability(a))[1] || t0.players[5];
+    names.delete(jd.n); jd.n='Jan Do'; names.add('Jan Do'); jd.sp='uforutsigbar'; jd.a=27; jd.s[3]=Math.max(jd.s[3],13); jd.ld=Math.max(jd.ld,7); jd.sy='lag'; jd.xp=Math.max(jd.xp,70); }
+  const anchor=mondayOf(now);
+  const g0=firstSlotAfter(anchor, now+90*60000);
+  const league={v:1, created:now, anchor, g:g0, g0, s:1, r:0, fx:makeFixtures(1), tb:emptyTable(), hist:[], wk:Math.floor(g0/3)};
+  const market=newMarketDoc();
+  refreshMarket(market, teams, r, league.wk, names);
+  return {league, teams, market};
+}
+
+/* ---------- marked ---------- */
+function newMarketDoc(){ return {w:0, items:[], log:[]}; }
+function addLog(market, text, w){ market.log.unshift({w, t:text}); market.log=market.log.slice(0,30); }
+function fmtKr(n){ const s=Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); return s+' kr'; }
+function refreshMarket(market, teams, r, week, names){
+  market.w=week;
+  // AI kjøper spillere som mennesker har lagt ut
+  const keep=[];
+  for(const it of market.items){
+    if(it.from>=0){
+      const seller=teams[it.from]; const p=seller && seller.players.find(x=>x.id===it.id);
+      if(!p){ continue; }
+      const v=value(p); const prob = it.price<=v*1.12 ? 0.6 : it.price<=v*1.4 ? 0.15 : 0.03;
+      if(r()<prob){
+        const buyers=teams.filter(t=>!t.owner && t.i!==it.from && t.money>=it.price && t.players.length<SQUAD_MAX);
+        if(buyers.length){
+          const b=pick(r,buyers);
+          seller.players=seller.players.filter(x=>x.id!==p.id); seller.money+=it.price;
+          delete p.lst; b.players.push(p); b.money-=it.price;
+          addLog(market, `${b.name} kjøpte ${p.n} (${p.a} år) fra ${seller.name} for ${fmtKr(it.price)}`, week);
+          continue;
+        }
+      }
+      if(it.exp<=week){ delete p.lst; continue; }
+      keep.push(it);
+    } else {
+      if(it.exp>week) keep.push(it);
+    }
+  }
+  market.items=keep;
+  const n=ri(r,18,22);
+  for(let k=0;k<n;k++){
+    const p=genMarketPlayer(r,names);
+    const price=Math.round(value(p)*(1.05+r()*0.25)/1000)*1000;
+    market.items.push({id:p.id, price, from:-1, exp:week+2, pl:p});
+  }
+  if(market.items.length>70) market.items=market.items.slice(-70);
+}
+
+/* ---------- sesongskifte ---------- */
+function seasonRollover(league, teams, r, names){
+  const order=tableOrder(league.tb);
+  const champ=order[0];
+  league.hist.push({s:league.s, t:champ.t, name:teams[champ.t].name, pts:champ.pts});
+  league.hist=league.hist.slice(-20);
+  order.slice(0,3).forEach((row,i)=>{ teams[row.t].money+=PRIZES[i]; });
+  const notes=[];
+  for(const t of teams){
+    const retired=[];
+    t.players.forEach(p=>{ p.a++; p.gl=0; });
+    t.players=t.players.filter(p=>{
+      if(p.a>=38 || (p.a>=35 && r()<(p.a-34)*0.3)){ retired.push(p); return false; }
+      return true;
+    });
+    for(let k=0;k<2;k++) t.players.push(genYouth(r,names));
+    while(t.players.length<SQUAD_MIN+1) t.players.push(genYouth(r,names));
+    ensureLineup(t);
+    if(t.owner && retired.length) notes.push({t:t.i, text:`${retired.map(p=>p.n).join(', ')} la opp etter sesongen.`});
+    t.st={};
+  }
+  league.s++; league.r=0; league.fx=makeFixtures(league.s); league.tb=emptyTable();
+  return notes;
+}
+
+/* ---------- en kampdag i to faser: avspark og slutt ---------- */
+function simulateRound(league, teams, market, names){
+  const g=league.g;
+  const r0=rngFrom('slot-'+g+'-'+league.s);
+  const week=Math.floor(g/3);
+  const out={doc:null, changed:new Set(), marketChanged:false};
+  if(g%3===0){
+    for(const t of teams){
+      if(!t.owner) aiPlan(t,r0,week);
+      trainTeam(t,r0,week); agingDecline(t,r0,week); formDrift(t,r0); weeklyFinance(t);
+      out.changed.add(t.i);
+    }
+    refreshMarket(market, teams, r0, week, names);
+    league.wk=week;
+    out.marketChanged=true;
+  }
+  const rd=league.r; const kick=slotTime(league.anchor,g);
+  const doc={s:league.s, r:rd, g, t:kick, live:true, m:[]};
+  for(const [h,a] of league.fx[rd]){
+    const Ht=teams[h], At=teams[a];
+    if(!Ht.owner && (!Ht.lineup || g%3===0)) Ht.lineup=autoLineup(Ht);
+    if(!At.owner && (!At.lineup || g%3===0)) At.lineup=autoLineup(At);
+    const res=simulateMatch(Ht,At,rngFrom(`m-${league.s}-${rd}-${h}-${a}`));
+    doc.m.push(Object.assign({h,a},res));
+    out.changed.add(h); out.changed.add(a);
+  }
+  doc.end = kick + Math.max(...doc.m.map(m=>m.L1+15+m.L2))*60000;
+  league.ph=1;
+  out.doc=doc;
+  return out;
+}
+function finishRound(league, teams, doc, names){
+  const r0=rngFrom('fin-'+doc.g+'-'+league.s);
+  const out={changed:new Set(), notes:[], rolled:false};
+  for(const res of doc.m){
+    const Ht=teams[res.h], At=teams[res.a];
+    const th=league.tb[res.h], ta=league.tb[res.a];
+    th[0]++; ta[0]++; th[4]+=res.hg; th[5]+=res.ag; ta[4]+=res.ag; ta[5]+=res.hg;
+    if(res.hg>res.ag){ th[1]++; ta[3]++; th[6]+=3; Ht.money+=WIN_BONUS; }
+    else if(res.hg<res.ag){ ta[1]++; th[3]++; ta[6]+=3; At.money+=WIN_BONUS; }
+    else { th[2]++; ta[2]++; th[6]++; ta[6]++; }
+    Ht.money+=GATE_HOME;
+    for(const [T,code] of [[Ht,'h'],[At,'a']]){
+      T.players.forEach(p=>{ if((p.sus||0)>0) p.sus--; });
+      for(const id of ((res.pl&&res.pl[code])||[])){ const p=T.players.find(x=>x.id===id); if(p) p.xp=(p.xp||0)+1; }
+      for(const c of (res.cd||[])){ if(c.s!==code) continue; const p=T.players.find(x=>x.id===c.i); if(!p) continue;
+        if(c.k==='r') p.sus=1; else { p.yc=(p.yc||0)+1; if(p.yc>=3){ p.sus=1; p.yc=0; } } }
+    }
+    for(const e of res.ev){ if(!GOAL_KINDS[e.k]) continue; const T=(e.s==='h')?Ht:At; const pl=T.players.find(p=>p.id===e.i); if(pl) pl.gl=(pl.gl||0)+1; }
+    out.changed.add(res.h); out.changed.add(res.a);
+  }
+  doc.live=false;
+  league.g++; league.r++; league.ph=0;
+  if(league.r>=ROUNDS){
+    out.notes=seasonRollover(league,teams,r0,names);
+    teams.forEach(t=>out.changed.add(t.i));
+    out.rolled=true;
+  }
+  return out;
+}
+/* enkel hjelper for tester: kjør hele kampdagen i ett */
+function runSlot(league, teams, market, names){
+  const a=simulateRound(league,teams,market,names);
+  const b=finishRound(league,teams,a.doc,names);
+  b.round=a.doc; b.marketChanged=a.marketChanged; a.changed.forEach(i=>b.changed.add(i));
+  return b;
+}
+
+
+return {
+  SK, SKI, SK_NAME, SK_SHORT, SEC, SEC_NAME, SPEC, SPEC_INFO, ROLE_NAME, ORDER_NAME, SLOT_NAME, SLOT_ROLE, SLOT_SIDE, ROLES,
+  N_TEAMS, ROUNDS, SQUAD_MIN, SQUAD_MAX, FORMATIONS, LAYOUT, CT, REL, ROLE_SC, TEAM_DEFS, PRIZES, START_MONEY,
+  ordersFor, orderedContribs, calcRatings, slotScore, autoLineup, ensureLineup, lineupQuality, teamStrength, assignFormation,
+  bestRole, ability, value, wage, cost, ageTrainF, trainingRate, lineupRoles, trainShare, formMult,
+  genPlayer, genMarketPlayer, genYouth, genSquad, newTeam, mapById,
+  simulateMatch, makeFixtures, slotTime, firstSlotAfter, mondayOf, osloParts, emptyTable, tableOrder,
+  createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
+  rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
+  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+};
+})();
+
+</script>
+<script>
+/* ===== Ligamester: lagring og handlinger mot delt database ===== */
+function makeStore({db, uid, now}){
+  const E = Engine;
+  now = now || (()=>Date.now());
+  const hid = (uid||'anon')+'-'+Math.random().toString(36).slice(2,8);
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const refs = { league: db.doc('league/main'), market: db.doc('market/current'), teams: db.collection('teams') };
+  const teamRef = i => db.doc('teams/t'+i);
+  const fail = msg => { throw new Error(msg); };
+
+  async function withLease(name, ttlMs, fn){
+    for(let k=0;k<20;k++){
+      const r = await db.doc('locks/'+name).acquire({holder:hid, ttlMs});
+      if(r.acquired) return fn();
+      await sleep(250+Math.random()*350);
+    }
+    fail('Spillet er opptatt akkurat nå. Prøv igjen om et øyeblikk.');
+  }
+  async function retry(fn){
+    try { return await fn(); }
+    catch(e){ if(e && e.code==='unavailable'){ await sleep(400+Math.random()*400); return fn(); } throw e; }
+  }
+
+  async function ensureInit(){
+    const snap = await refs.league.get();
+    if(snap.exists) return false;
+    const lease = await db.doc('locks/init').acquire({holder:hid, ttlMs:30000});
+    if(!lease.acquired) return false;
+    if((await refs.league.get()).exists) return false;
+    const {league, teams, market} = E.createLeague(now());
+    for(const t of teams) await retry(()=>teamRef(t.i).set(t));
+    await retry(()=>refs.market.set(market));
+    await retry(()=>refs.league.set(league));
+    return true;
+  }
+
+  async function readAllTeams(){
+    const snap = await refs.teams.get();
+    const arr = new Array(E.N_TEAMS).fill(null);
+    snap.docs.forEach(d=>{ const t=d.data(); if(t && typeof t.i==='number') arr[t.i]=clone(t); });
+    return arr;
+  }
+
+  const roundId = d => 'rounds/s'+d.s+'r'+d.r;
+  function dueNow(L, doc){
+    const t=now();
+    if(!L.ph) return t >= E.slotTime(L.anchor, L.g);
+    return doc ? t >= doc.end : false;
+  }
+  async function tick(){
+    const first = await refs.league.get();
+    if(!first.exists) return {ran:0};
+    const L0 = first.data();
+    let d0=null;
+    if(L0.ph){ const s=await db.doc('rounds/s'+L0.s+'r'+L0.r).get(); d0=s.exists?s.data():null; }
+    if(!dueNow(L0,d0)) return {ran:0};
+    const lease = await db.doc('locks/tick').acquire({holder:hid, ttlMs:60000});
+    if(!lease.acquired) return {ran:0, busy:true};
+    const league = clone((await refs.league.get()).data());
+    const teams = await readAllTeams();
+    if(teams.some(t=>!t)) fail('Mangler lagdata.');
+    const orig = teams.map(t=>clone(t));
+    const msnap = await refs.market.get();
+    const market = msnap.exists ? clone(msnap.data()) : E.newMarketDoc();
+    const names = new Set(); teams.forEach(t=>t.players.forEach(p=>names.add(p.n)));
+    let doc=null; if(league.ph){ const s=await db.doc('rounds/s'+league.s+'r'+league.r).get(); doc=s.exists?clone(s.data()):null; if(!doc) league.ph=0; }
+    const docs=new Map(); const changed=new Set(); let marketChanged=false; let started=0, finished=0; let guard=0;
+    while(guard++<200){
+      if(!league.ph){
+        if(now() < E.slotTime(league.anchor, league.g)) break;
+        const out=E.simulateRound(league,teams,market,names);
+        doc=out.doc; docs.set(roundId(doc),doc); out.changed.forEach(i=>changed.add(i)); if(out.marketChanged) marketChanged=true; started++;
+      } else {
+        if(!doc || now() < doc.end) break;
+        const out=E.finishRound(league,teams,doc,names);
+        docs.set(roundId(doc),doc); out.changed.forEach(i=>changed.add(i)); finished++; doc=null;
+      }
+    }
+    if(!started && !finished) return {ran:0};
+    for(const d of docs.values()) await retry(()=>db.doc(roundId(d)).set(d));
+    for(const i of changed){
+      const diff={}; const a=teams[i], b=orig[i];
+      for(const k of Object.keys(a)){ if(k==='owner'||k==='name'||k==='c'||k==='short') continue; if(JSON.stringify(a[k])!==JSON.stringify(b[k])) diff[k]=a[k]; }
+      if(Object.keys(diff).length) await retry(()=>teamRef(i).update(diff));
+    }
+    if(marketChanged) await retry(()=>refs.market.set(market));
+    await retry(()=>refs.league.set(league));
+    return {ran:finished, started};
+  }
+  async function lineupLocked(){
+    const s=await refs.league.get(); if(!s.exists) return false;
+    const L=s.data(); return now() >= E.slotTime(L.anchor, L.g);
+  }
+
+  /* ----- lag ----- */
+  const shortOf = n => (String(n).replace(/[^A-Za-zÆØÅæøå]/g,'').slice(0,3)||'LAG').toUpperCase();
+  function cleanName(name, teams, selfI){
+    name=String(name||'').trim().replace(/\s+/g,' ').slice(0,28);
+    if(name.length<2) fail('Klubbnavnet er for kort.');
+    if(teams.some(t=>t && t.i!==selfI && t.name.toLowerCase()===name.toLowerCase())) fail('Det navnet brukes allerede av et annet lag.');
+    return name;
+  }
+  async function claimTeam(i, newName){
+    return withLease("claim", 2500, async ()=>{
+      const teams = await readAllTeams();
+      if(teams.some(t=>t && t.owner===uid)) fail('Du styrer allerede et lag.');
+      const t = teams[i]; if(!t) fail('Laget finnes ikke.');
+      if(t.owner) fail('Laget er allerede tatt over av en annen manager.');
+      const upd={owner:uid, ownerSince:now(), ai:{pref:(t.ai&&t.ai.pref)||'4-4-2', until:0}};
+      if(newName!=null && String(newName).trim()!==t.name){ const nm=cleanName(newName,teams,i); upd.name=nm; upd.short=shortOf(nm); }
+      await retry(()=>teamRef(i).update(upd));
+    });
+  }
+  async function releaseTeam(i){
+    return withLease("claim", 2500, async ()=>{
+      const s = await teamRef(i).get(); const t=s.data();
+      if(!t || t.owner!==uid) fail('Du styrer ikke dette laget.');
+      await retry(()=>teamRef(i).update({owner:null, ownerSince:null}));
+    });
+  }
+  async function saveLineup(i, lineup){
+    if(await lineupLocked()) fail('Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.');
+    await retry(()=>teamRef(i).update({lineup}));
+  }
+  async function saveTraining(i, training){ await retry(()=>teamRef(i).update({training})); }
+  async function renameTeam(i, name){
+    const teams=await readAllTeams(); name=cleanName(name,teams,i);
+    await retry(()=>teamRef(i).update({name, short:shortOf(name)}));
+  }
+
+  /* ----- marked ----- */
+  async function readMarket(){ const s=await refs.market.get(); return s.exists ? clone(s.data()) : E.newMarketDoc(); }
+  async function listPlayer(ti, pid, price){
+    price=Math.round(price/1000)*1000; if(!(price>=5000)) fail('Prisen må være minst 5 000 kr.');
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); const m=await readMarket();
+      if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const p=t.players.find(x=>x.id===pid); if(!p) fail('Spilleren finnes ikke.');
+      if(m.items.some(it=>it.id===pid)) fail('Spilleren er allerede til salgs.');
+      if(t.players.length<=E.SQUAD_MIN) fail('Du må beholde minst '+E.SQUAD_MIN+' spillere.');
+      p.lst=price; m.items.push({id:pid, price, from:ti, exp:m.w+2});
+      await retry(()=>teamRef(ti).update({players:t.players}));
+      await retry(()=>refs.market.set(m));
+    });
+  }
+  async function unlistPlayer(ti, pid){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); const m=await readMarket();
+      if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const p=t.players.find(x=>x.id===pid); if(p) delete p.lst;
+      m.items=m.items.filter(it=>it.id!==pid);
+      await retry(()=>teamRef(ti).update({players:t.players}));
+      await retry(()=>refs.market.set(m));
+    });
+  }
+  async function quickSell(ti, pid){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); const m=await readMarket();
+      if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const p=t.players.find(x=>x.id===pid); if(!p) fail('Spilleren finnes ikke.');
+      if(t.players.length<=E.SQUAD_MIN) fail('Du må beholde minst '+E.SQUAD_MIN+' spillere.');
+      const price=Math.round(E.value(p)*0.45/1000)*1000;
+      t.players=t.players.filter(x=>x.id!==pid); t.money+=price;
+      m.items=m.items.filter(it=>it.id!==pid);
+      E.addLog(m, `${t.name} solgte ${p.n} (${p.a} år) til klubbens speidere for ${E.fmtKr(price)}`, m.w);
+      await retry(()=>teamRef(ti).update({players:t.players, money:t.money}));
+      await retry(()=>refs.market.set(m));
+      return price;
+    });
+  }
+  async function buy(itemId, ti){
+    return withLease("market", 3000, async ()=>{
+      const m=await readMarket(); const it=m.items.find(x=>x.id===itemId);
+      if(!it) fail('Spilleren er ikke lenger til salgs.');
+      if(it.from===ti) fail('Du kan ikke kjøpe din egen spiller.');
+      const b=(await teamRef(ti).get()).data();
+      if(b.owner!==uid) fail('Du styrer ikke dette laget.');
+      if(b.money<it.price) fail('Du har ikke råd. Du mangler '+E.fmtKr(it.price-b.money)+'.');
+      if(b.players.length>=E.SQUAD_MAX) fail('Troppen er full (maks '+E.SQUAD_MAX+' spillere).');
+      let p, seller=null;
+      if(it.from>=0){
+        seller=(await teamRef(it.from).get()).data();
+        p=seller.players.find(x=>x.id===itemId);
+        if(!p){ m.items=m.items.filter(x=>x.id!==itemId); await refs.market.set(m); fail('Spilleren er ikke lenger på laget.'); }
+        seller.players=seller.players.filter(x=>x.id!==itemId); seller.money+=it.price;
+      } else p=clone(it.pl);
+      delete p.lst; p.gl=0;
+      b.players.push(p); b.money-=it.price;
+      m.items=m.items.filter(x=>x.id!==itemId);
+      E.addLog(m, `${b.name} kjøpte ${p.n} (${p.a} år) for ${E.fmtKr(it.price)}${seller?` fra ${seller.name}`:''}`, m.w);
+      await retry(()=>teamRef(ti).update({players:b.players, money:b.money}));
+      if(seller) await retry(()=>teamRef(it.from).update({players:seller.players, money:seller.money}));
+      await retry(()=>refs.market.set(m));
+      return p;
+    });
+  }
+
+  return { ensureInit, tick, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+}
+
+</script>
+<script>
+/* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */
+function makeDb(sb){
+  const clone = o => o===undefined?undefined:JSON.parse(JSON.stringify(o));
+  const fail = (error) => { const e=new Error(error.message||'Databasefeil'); e.code = (/finnes ikke|not exist/i.test(error.message||''))?'invalid_argument':(error.code||'unavailable'); throw e; };
+  const snapOf = (path, row) => ({ id:path.split('/').pop(), exists:!!row, data:()=>row?clone(row.data):undefined, metadata:{fromCache:false,hasPendingWrites:false} });
+  const collOf = p => p.split('/')[0];
+  let chan=0;
+  function docRef(path){
+    return {
+      id:path.split('/').pop(), path,
+      async get(){ const {data,error}=await sb.from('docs').select('path,data').eq('path',path).maybeSingle(); if(error) fail(error); return snapOf(path,data); },
+      async set(v){ const {error}=await sb.from('docs').upsert({path,data:clone(v)}); if(error) fail(error); },
+      async update(v){ const {error}=await sb.rpc('merge_doc',{p_path:path,p_data:clone(v)}); if(error) fail(error); },
+      async delete(){ const {error}=await sb.from('docs').delete().eq('path',path); if(error) fail(error); },
+      async acquire({holder,ttlMs}){ const {data,error}=await sb.rpc('acquire_lease',{p_name:path,p_holder:holder,p_ttl_ms:ttlMs||30000}); if(error) fail(error); return {acquired:data===true}; },
+      onSnapshot(next,err){
+        let alive=true, cur=undefined;
+        const emit=row=>{ if(alive) next(snapOf(path,row)); };
+        const load=async()=>{ try{ const {data,error}=await sb.from('docs').select('path,data').eq('path',path).maybeSingle(); if(error) throw error; cur=data; emit(data); }catch(e){ if(err&&alive) err(e); } };
+        load();
+        const ch=sb.channel('d'+(++chan)+'-'+path).on('postgres_changes',{event:'*',schema:'public',table:'docs',filter:'path=eq.'+path},p=>{
+          if(p.eventType==='DELETE'){ emit(null); } else if(p.new&&p.new.data!==undefined){ emit({path,data:p.new.data}); } else load();
+        }).subscribe(st=>{ if(st==='SUBSCRIBED') load(); });
+        const poll=setInterval(load,30000);
+        return ()=>{ alive=false; clearInterval(poll); sb.removeChannel(ch); };
+      }
+    };
+  }
+  function collRef(path, filters=[]){
+    const c=collOf(path);
+    const matches=row=>filters.every(([f,op,val])=>op==='=='?String(row.data[f])===String(val):true);
+    const query=()=>{ let q=sb.from('docs').select('path,data').eq('coll',c); filters.forEach(([f,op,v])=>{ if(op==='==') q=q.eq('data->>'+f,String(v)); }); return q; };
+    return {
+      path, doc:id=>docRef(path+'/'+(id||Math.random().toString(36).slice(2))),
+      where(f,op,v){ return collRef(path,filters.concat([[f,op,v]])); },
+      async get(){ const {data,error}=await query(); if(error) fail(error); const docs=(data||[]).map(r=>snapOf(r.path,r)); return {docs,size:docs.length,empty:!docs.length}; },
+      onSnapshot(next,err){
+        let alive=true; const rows=new Map();
+        const emit=()=>{ if(alive) next({docs:[...rows.values()].map(r=>snapOf(r.path,r)),metadata:{fromCache:false},docChanges:()=>[]}); };
+        const load=async()=>{ try{ const {data,error}=await query(); if(error) throw error; rows.clear(); (data||[]).forEach(r=>rows.set(r.path,r)); emit(); }catch(e){ if(err&&alive) err(e); } };
+        load();
+        const ch=sb.channel('c'+(++chan)+'-'+path).on('postgres_changes',{event:'*',schema:'public',table:'docs',filter:'coll=eq.'+c},p=>{
+          if(p.eventType==='DELETE'){ const old=p.old&&p.old.path; if(old){ rows.delete(old); emit(); } return; }
+          if(p.new&&p.new.data!==undefined){ const r={path:p.new.path,data:p.new.data}; if(matches(r)) rows.set(r.path,r); else rows.delete(r.path); emit(); } else load();
+        }).subscribe(st=>{ if(st==='SUBSCRIBED') load(); });
+        const poll=setInterval(load,30000);
+        return ()=>{ alive=false; clearInterval(poll); sb.removeChannel(ch); };
+      }
+    };
+  }
+  return { doc:docRef, collection:p=>collRef(p) };
+}
+
+</script>
+<script>
+/* ===== Innlogging (Supabase Auth) og oppkobling mot spillet ===== */
+(function(){
+  const CFG = window.LM_CONFIG;
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  window.__deferBoot = true;
+  const sb = window.supabase.createClient(CFG.url, CFG.key, { auth:{ persistSession:true, autoRefreshToken:true } });
+  const db = makeDb(sb);
+  let mode='in', msg='';
+  function showLogin(note){
+    document.body.classList.add('loggedout');
+    $('#view').innerHTML = `<div class="card" style="max-width:420px;margin:40px auto"><h3>${mode==='in'?'Logg inn':'Opprett bruker'}</h3>
+    <form id="authform" class="authform">
+      ${mode==='up'?`<label>Visningsnavn<input id="a-name" autocomplete="nickname" maxlength="24" required></label>`:''}
+      <label>E-post<input id="a-mail" type="email" autocomplete="email" required></label>
+      <label>Passord<input id="a-pass" type="password" autocomplete="${mode==='in'?'current-password':'new-password'}" minlength="6" required></label>
+      ${note||msg?`<div class="note" role="alert">${esc(note||msg)}</div>`:''}
+      <div class="row"><button class="btn primary" type="submit">${mode==='in'?'Logg inn':'Opprett bruker'}</button>
+      <button class="btn" type="button" id="a-switch">${mode==='in'?'Ny bruker?':'Har bruker allerede'}</button></div>
+    </form></div>`;
+    $('#top').innerHTML=''; $('#tabs').innerHTML='';
+    $('#a-switch').onclick=()=>{ mode=mode==='in'?'up':'in'; msg=''; showLogin(); };
+    $('#authform').onsubmit=async ev=>{
+      ev.preventDefault(); const email=$('#a-mail').value.trim(), password=$('#a-pass').value;
+      const btn=ev.target.querySelector('button[type=submit]'); btn.disabled=true;
+      try{
+        if(mode==='up'){
+          const name=$('#a-name').value.trim().slice(0,24);
+          const {data,error}=await sb.auth.signUp({email,password,options:{data:{name}}});
+          if(error) throw error;
+          if(!data.session){ mode='in'; msg='Brukeren er opprettet. Sjekk e-posten din for bekreftelseslenke, og logg deretter inn.'; return showLogin(); }
+        } else {
+          const {error}=await sb.auth.signInWithPassword({email,password}); if(error) throw error;
+        }
+        start();
+      }catch(e){ msg=/Invalid login/i.test(e.message)?'Feil e-post eller passord.':(/already/i.test(e.message)?'E-posten er allerede i bruk.':e.message); showLogin(); }
+    };
+  }
+  let started=false;
+  async function start(){
+    const {data}=await sb.auth.getSession(); const session=data&&data.session; if(!session) return showLogin();
+    if(started) return; started=true; document.body.classList.remove('loggedout');
+    const uid=session.user.id; let myName=(session.user.user_metadata&&session.user.user_metadata.name)||'';
+    const user={
+      id:async()=>uid, can:async()=>true, isOwner:async()=>false, canEdit:async()=>true,
+      me:async()=>({id:uid,name:myName}),
+      profiles:async ids=>{ const o={}; const {data}=await sb.from('profiles').select('id,name').in('id',ids); (data||[]).forEach(p=>{ o[p.id]={id:p.id,name:p.name||'',isMe:p.id===uid}; }); ids.forEach(i=>{ if(!o[i]) o[i]={id:i,name:'',isMe:i===uid}; }); return o; }
+    };
+    window.claude={use:async n=>n==='db'?db:n==='user'?user:null};
+    let acct=$('#acct'); if(!acct){ acct=document.createElement('div'); acct.id='acct'; acct.className='acct'; document.body.appendChild(acct); }
+    acct.innerHTML=`<span>Innlogget som ${esc(myName||session.user.email)}</span> <button class="btn sm" id="a-out">Logg ut</button>`;
+    $('#a-out').onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+    window.__lm.boot();
+  }
+  window.__lmAuth={sb,start,showLogin};
+  document.addEventListener('DOMContentLoaded',start); if(document.readyState!=='loading') setTimeout(start,0);
+})();
+
+</script>
+<script>
+/* ===== Ligamester: grensesnitt ===== */
+(function(){
+const E = Engine;
+const S = { league:null, teams:new Array(E.N_TEAMS).fill(null), market:null, rounds:{}, uid:null, canWrite:true, store:null, user:null,
+  tab:'home', sel:9, sortKey:'pos', round:null, mine:false, mf:{pos:'', maxAge:40, sort:'price'}, names:{}, me:null, ready:false, ticking:false, myName:'', pendingRender:false, watch:null, seen:{}, liveSig:'' };
+const TABS=[['home','Oversikt'],['lineup','Oppstilling'],['squad','Spillere'],['train','Trening'],['market','Marked'],['table','Tabell'],['games','Kamper'],['clubs','Lag'],['help','Regler']];
+const NEEDS_TEAM=['lineup','squad','train','market'];
+const SLOT_CODE={GK:'K',DL:'VB',DC:'MS',DR:'HB',WL:'VV',WR:'HV',AL:'VA',AR:'HA',MC:'M',FC:'S'};
+const ORDER_HELP={normal:'Vanlig spill uten spesielle ordre.',def:'Mer forsvar, mindre angrep. En defensiv midtbane gir for eksempel høyere forsvarsrating, men mister angrepsrating.',off:'Mer angrep, mindre forsvar.',left:'Flytter en del av innsatsen mot venstre side.',right:'Flytter en del av innsatsen mot høyre side.',mid:'Trekker inn mot midten og styrker midtsektoren.'};
+const FORM_LABEL=['','Elendig','Svak','Dårlig','Middels','God','Veldig god','Utmerket','Eksepsjonell'];
+const NO_TEAM_TXT='Du har ikke noe lag ennå. Velg et lag under Lag.';
+
+/* ---------- hjelpere ---------- */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=(s,el)=>(el||document).querySelector(s);
+const clone=o=>JSON.parse(JSON.stringify(o));
+const kr=E.fmtKr;
+const fT=new Intl.DateTimeFormat('nb-NO',{timeZone:'Europe/Oslo',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const fmtTime=ms=>fT.format(new Date(ms)).replace(',','');
+function until(ms){ const d=ms-Date.now(); if(d<=0) return 'nå'; const m=Math.round(d/60000); if(m<60) return 'om '+m+' min'; const h=Math.floor(m/60); if(h<48) return 'om '+h+' t '+(m%60)+' min'; return 'om '+Math.floor(h/24)+' d '+(h%24)+' t'; }
+const sk=v=>`<span class="sk h${v<4?0:v<8?1:v<12?2:v<16?3:4}">${v}</span>`;
+const specBadge=p=>p.sp?` <span class="spec" title="${esc(E.SPEC_INFO[p.sp])}">${E.SPEC[p.sp]}</span>`:'';
+const roleOf=p=>E.ROLE_NAME[E.bestRole(p)];
+const isSus=p=>(p.sus||0)>0;
+const traitBadges=p=>`${isSus(p)?' <span class="tag red" title="Må stå over neste kamp">Utestengt</span>':''}${(p.yc||0)>0?` <span class="ycn" title="Gule kort i ulike kamper. Ved tre må spilleren stå over en kamp."><i class="kort y"></i>${p.yc}</span>`:''}${p.sy?` <span class="tag" title="${esc(E.STYLE_INFO[p.sy])}">${E.STYLE[p.sy]}</span>`:''}${E.tmOf(p)>=8?` <span class="tag" title="Tar oftere frispark og får oftere kort.">${E.tmLabel(E.tmOf(p))}</span>`:''}`;
+const surname=p=>p.n.split(' ').slice(1).join(' ')||p.n;
+function lum(hex){ const n=parseInt(hex.slice(1),16); const f=v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)}; return .2126*f(n>>16&255)+.7152*f(n>>8&255)+.0722*f(n&255); }
+const textOn=hex=>lum(hex)>.42?'#10201A':'#FFFFFF';
+function crest(t,size){ size=size||30; const [c1,c2]=t.c; const tc=textOn(c1);
+  return `<svg class="crest" width="${size}" height="${Math.round(size*1.12)}" viewBox="0 0 32 36" aria-hidden="true"><path d="M2 2h28v18c0 8-6 13-14 16C8 33 2 28 2 20z" fill="${c1}"/><path d="M2 2h28v8H2z" fill="${c2}"/><text x="16" y="27" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="700" font-size="11" letter-spacing=".5" fill="${tc}">${esc(t.short)}</text></svg>`; }
+const myTeam=()=>S.me!=null?S.teams[S.me]:null;
+const teamOk=()=>S.league && S.teams.every(Boolean);
+function teamQ(t){ try{ return E.lineupQuality(E.calcRatings(t.players,t.lineup))/3.2; }catch(e){ return 0; } }
+function mgrName(t){ if(!t.owner) return null; if(t.owner===S.uid) return S.myName||'Du'; return S.names[t.owner]||'Manager'; }
+function toast(msg,err){ const el=document.createElement('div'); el.className='toast'+(err?' err':''); el.textContent=msg; $('#toast').appendChild(el); setTimeout(()=>el.remove(),err?5200:3200); }
+async function run(fn,ok){ try{ const r=await fn(); if(ok) toast(typeof ok==='function'?ok(r):ok); return r; }catch(e){ toast((e&&e.message)||'Noe gikk galt.',true); } }
+function nextSlotInfo(){ const L=S.league; return {t:E.slotTime(L.anchor,L.g), r:L.r, s:L.s}; }
+function roundDoc(){ const L=S.league; return L&&L.ph?S.rounds[L.r]||null:null; }
+function lineupLocked(){ const L=S.league; return !!L && Date.now()>=E.slotTime(L.anchor,L.g); }
+function liveOf(m,doc){
+  const el=(Date.now()-doc.t)/60000; const dur=m.L1+15+m.L2;
+  if(!doc.live || el>=dur) return {st:'done',score:[m.hg,m.ag],label:'Slutt',vis:m.ev,el:dur};
+  if(el<0) return {st:'before',score:[0,0],label:'',vis:[],el};
+  const vis=m.ev.filter(e=>e.t<=el); let sc=[0,0]; vis.forEach(e=>{ if(e.sc) sc=e.sc; });
+  if(el>=m.L1&&el<m.L1+15) return {st:'break',score:sc,label:'Pause',vis,el};
+  return {st:'live',score:sc,label:E.labelOf(Math.max(0.3,el),m.L1),vis,el};
+}
+function fixtureOf(ti){ const L=S.league; const p=L.fx[L.r].find(x=>x[0]===ti||x[1]===ti); return p?{home:p[0]===ti, opp:p[0]===ti?p[1]:p[0]}:null; }
+
+/* ---------- visninger ---------- */
+function topbar(){
+  const L=S.league; const t=myTeam();
+  let h=`<div class="brand"><b>Ligamester</b>`;
+  if(L) h+=`<span>Sesong ${L.s} · runde ${Math.min(L.r+1,E.ROUNDS)} av ${E.ROUNDS}</span>`;
+  h+=`</div><div class="topinfo">`;
+  if(t){ h+=`<div class="club">${crest(t,28)}<div><b>${esc(t.name)}</b></div></div><div class="stat"><span class="caps">Kasse</span><span class="v num">${kr(t.money)}</span></div>`; }
+  if(L&&L.ph){ h+=`<div class="stat"><span class="caps">Runde ${L.r+1}</span><span class="v">Direkte nå</span></div>`; }
+  else if(L){ const n=nextSlotInfo(); h+=`<div class="stat"><span class="caps">Neste kamp</span><span class="v">${fmtTime(n.t)} <span class="muted small">${until(n.t)}</span></span></div>`; }
+  return h+`</div>`;
+}
+function tabsBar(){ return TABS.map(([k,n])=>`<button class="tab" role="tab" data-act="tab" data-k="${k}" aria-selected="${S.tab===k}">${n}</button>`).join(''); }
+
+function ratingsHtml(r,opp){
+  return `<div class="ratings">`+E.SEC.map((s,i)=>{
+    const w=Math.min(100,r[i]/16*100);
+    const bar=opp?`<div class="rbar duo"><i style="width:${w}%"></i><i class="opp" style="width:${Math.min(100,opp[i]/16*100)}%"></i></div>`:`<div class="rbar"><i style="width:${w}%"></i></div>`;
+    return `<div class="rrow"><span class="lab">${E.SEC_NAME[s]}</span>${bar}<span class="val">${r[i].toFixed(1)}</span></div>`;
+  }).join('')+`</div>`;
+}
+
+function joinPicker(){
+  const free=S.teams.filter(t=>t&&!t.owner);
+  return `<div class="card"><h3>Ta over et lag <small>${free.length} av ${E.N_TEAMS} lag styres av datamaskinen</small></h3>
+  <p class="small muted" style="margin:0 0 12px">Når du tar over, erstatter du datamaskinen som manager. Du beholder spillerne laget har i dag.</p>
+  <div class="teamgrid">${free.map(clubCard).join('')}</div></div>`;
+}
+function clubCard(t){
+  const mine=t.owner&&t.owner===S.uid; const order=E.tableOrder(S.league.tb); const pos=order.findIndex(o=>o.t===t.i)+1;
+  const canClaim=S.me==null && !t.owner && S.uid && S.canWrite!==false;
+  let tag=t.owner?`<span class="tag human">${esc(mgrName(t))}</span>`:`<span class="tag ai">Datastyrt</span>`;
+  return `<div class="card tcard">${crest(t,44)}<div class="meta"><b>${esc(t.name)}</b><span class="small muted">Styrke <span class="num">${teamQ(t).toFixed(1)}</span> · ${pos}. plass</span>${tag}</div>
+  <div class="act">${canClaim?`<button class="btn primary sm" data-act="claim" data-i="${t.i}">Ta over laget</button>`:''}${mine?`<button class="btn sm" data-act="rename" data-i="${t.i}">Endre navn</button><button class="btn sm danger" data-act="release" data-i="${t.i}">Gi fra deg laget</button>`:''}</div></div>`;
+}
+
+function viewHome(){
+  const L=S.league; const t=myTeam();
+  if(!t){
+    let h=`<div class="sectionhead"><h2>Velkommen</h2></div><div class="note" style="margin-bottom:16px">${S.canWrite===false?'Du har bare lesetilgang i dette spillet. Be eieren om Contributor-tilgang for å styre et lag.':!S.uid?'Du må være logget inn for å styre et lag.':'Velg et lag og bli manager. Tre kamper hver uke: tirsdag, fredag og søndag kl. 18.00.'}</div>`;
+    return h+joinPicker();
+  }
+  const n=nextSlotInfo(); const fx=fixtureOf(t.i); const opp=fx?S.teams[fx.opp]:null;
+  const rdoc=roundDoc(); const myM=rdoc&&rdoc.m.find(m=>m.h===t.i||m.a===t.i);
+  const mine=E.calcRatings(t.players,t.lineup||E.autoLineup(clone(t)));
+  let nextCard=`<div class="card"><h3>Neste kamp <small>${fmtTime(n.t)} · ${until(n.t)}</small></h3>`;
+  if(opp){
+    const ol=opp.lineup||E.autoLineup(clone(opp)); const or=E.calcRatings(opp.players,ol);
+    nextCard+=`<div class="scoreline" style="margin-bottom:14px"><div class="tm">${crest(fx.home?t:opp,34)}<b>${esc((fx.home?t:opp).name)}</b></div><span class="muted">mot</span><div class="tm away">${crest(fx.home?opp:t,34)}<b>${esc((fx.home?opp:t).name)}</b></div></div>
+    ${ratingsHtml(mine,or)}<p class="tiny muted" style="margin:10px 0 0">Grønn stolpe er din rating, gul strek er ${esc(opp.name)}. ${fx.home?'Du spiller hjemme.':'Du spiller borte.'}</p>`;
+  } else nextCard+=`<div class="empty">Ingen kamp funnet.</div>`;
+  nextCard+=`<div class="row" style="margin-top:12px"><button class="btn primary" data-act="tab" data-k="lineup">Endre oppstilling</button><button class="btn" data-act="tab" data-k="train">Trening</button></div></div>`;
+
+  const order=E.tableOrder(L.tb); const pos=order.findIndex(o=>o.t===t.i); const from=Math.max(0,Math.min(pos-2,order.length-5));
+  const slice=order.slice(from,from+5);
+  const tbl=`<div class="card"><h3>Tabellen <small>Du er nummer ${pos+1}</small></h3><div class="tablewrap"><table><thead><tr><th>#</th><th>Lag</th><th class="r">K</th><th class="r">+/-</th><th class="r">P</th></tr></thead><tbody>${slice.map((o,k)=>`<tr class="${o.t===t.i?'me':''}"><td class="num">${from+k+1}</td><td>${esc(S.teams[o.t].name)}</td><td class="r num">${o.p}</td><td class="r num">${o.gd>0?'+':''}${o.gd}</td><td class="r num"><b>${o.pts}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+
+  const lastR=S.rounds[L.r-1]; let res=`<div class="card"><h3>Siste kamper</h3>`;
+  if(lastR){ res+=`<div class="tablewrap">${lastR.m.map(m=>fxRow(m,t.i)).join('')}</div>`; } else res+=`<div class="empty">Ingen kamper spilt ennå denne sesongen.</div>`;
+  res+=`</div>`;
+
+  const tl=(t.tl||[]).slice(0,7); const tr=`<div class="card"><h3>Treningsrapport</h3>${tl.length?`<ul class="timeline" style="grid-template-columns:1fr">${tl.map(x=>`<li style="grid-template-columns:1fr"><span><b>${esc(x.p)}</b> <span class="${x.d>0?'up':'down'}">${x.d>0?'økte':'mistet'}</span> ${E.SK_NAME[x.k]} til ${x.l}</span></li>`).join('')}</ul>`:`<div class="empty">Ingen endringer ennå. Trening telles hver tirsdag.</div>`}</div>`;
+  const log=(S.market&&S.market.log||[]).slice(0,6); const nw=`<div class="card"><h3>Transfernytt</h3>${log.length?`<ul class="timeline" style="grid-template-columns:1fr">${log.map(x=>`<li style="grid-template-columns:1fr"><span class="small">${esc(x.t)}</span></li>`).join('')}</ul>`:`<div class="empty">Ingen handler ennå.</div>`}</div>`;
+  return `<div class="grid g2">${myM?liveCard(rdoc,myM):nextCard}${tbl}${res}${tr}${nw}</div>`;
+}
+
+function viewLineup(){
+  const t=myTeam(); if(!t) return needTeam();
+  const lu=t.lineup||E.autoLineup(clone(t)); const by=E.mapById(t.players); const slots=E.FORMATIONS[lu.f]; const lay=E.LAYOUT[lu.f];
+  const r=E.calcRatings(t.players,lu,by);
+  if(S.sel>=11) S.sel=0;
+  const pitchSvg=`<svg viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true"><rect x="1" y="1" width="98" height="126"/><line x1="1" y1="64" x2="99" y2="64"/><circle cx="50" cy="64" r="10"/><rect x="24" y="1" width="52" height="19"/><rect x="38" y="1" width="24" height="7"/><rect x="24" y="108" width="52" height="19"/><rect x="38" y="120" width="24" height="7"/></svg>`;
+  const chips=slots.map((st,i)=>{ const p=by[lu.sl[i]]; const o=(lu.o&&lu.o[i])||'normal';
+    return `<button class="slot${p?'':' empty'}" style="left:${lay[i][0]}%;top:${lay[i][1]}%" data-act="selslot" data-i="${i}" aria-pressed="${S.sel===i}" title="${E.SLOT_NAME[st]}"><span class="dot" style="background:${t.c[0]};color:${textOn(t.c[0])}">${SLOT_CODE[st]}</span><span class="nm">${p?esc(surname(p)):'Tom'}</span>${o!=='normal'?`<span class="ord">${E.ORDER_NAME[o]}</span>`:''}</button>`; }).join('');
+  const xi=lu.sl.map(id=>by[id]).filter(Boolean).sort((a,b)=>b.s[6]-a.s[6]);
+  const tool=`<div class="row"><label class="f">Formasjon<select id="formation" data-change="formation">${Object.keys(E.FORMATIONS).map(f=>`<option value="${f}"${f===lu.f?' selected':''}>${f}</option>`).join('')}</select></label>
+  <label class="f">Dødballtaker<select id="taker" data-change="taker">${xi.map(p=>`<option value="${p.id}"${p.id===lu.tk?' selected':''}>${esc(p.n)} (${p.s[6]})</option>`).join('')}</select></label>
+  <button class="btn" data-act="auto" style="align-self:flex-end">Sett opp automatisk</button></div>`;
+  const i=S.sel, st=slots[i], cur=by[lu.sl[i]], ord=(lu.o&&lu.o[i])||'normal';
+  const topSk=[...new Set(E.CT[st].slice().sort((a,b)=>b[2]-a[2]).map(c=>c[1]))].slice(0,3);
+  const cand=t.players.slice().sort((a,b)=>E.slotScore(b,st)-E.slotScore(a,st));
+  const where=id=>{ const j=lu.sl.indexOf(id); return j<0?'<span class="muted">Benk</span>':j===i?'<b>Her</b>':SLOT_CODE[slots[j]]; };
+  const editor=`<div class="card"><h3>${E.SLOT_NAME[st]} <small>${cur?esc(cur.n):'Ingen spiller'}</small></h3>
+  <div class="row" style="margin-bottom:6px"><div class="seg" role="group" aria-label="Spilleordre">${E.ordersFor(st).map(o=>`<button data-act="order" data-o="${o}" aria-pressed="${o===ord}">${E.ORDER_NAME[o]}</button>`).join('')}</div></div>
+  <p class="small muted" style="margin:0 0 12px;max-width:60ch">${ORDER_HELP[ord]}</p>
+  <div class="tablewrap" style="max-height:340px;overflow:auto"><table><thead><tr><th>Spiller</th><th class="c">Nå</th>${topSk.map(k=>`<th class="c" title="${E.SK_NAME[k]}">${E.SK_SHORT[k]}</th>`).join('')}<th class="c">Form</th></tr></thead><tbody>
+  ${cand.map(p=>`<tr class="click${p.id===lu.sl[i]?' me':''}" data-act="assign" data-id="${p.id}"><td><span class="pname">${esc(p.n)}</span>${specBadge(p)}${isSus(p)?' <span class="tag red">Utestengt</span>':''}<div class="tiny muted">${roleOf(p)}, ${p.a} år</div></td><td class="c">${where(p.id)}</td>${topSk.map(k=>`<td class="c">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const extra=capSubsPanel(t,lu,by,xi);
+  const rat=`<div class="card"><h3>Lagets ratinger <small>etter form og spesialiteter</small></h3>${ratingsHtml(r)}</div>`;
+  return `${lineupLocked()?'<div class="note" style="margin-bottom:16px">Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.</div>':''}<div class="lineup"><div class="pitchbox">${tool}<div class="pitch">${pitchSvg}${chips}</div><p class="tiny muted" style="margin:0">Trykk på en spiller på banen, og velg så hvem som skal spille der.</p></div><div class="grid">${rat}${editor}${extra}</div></div>`;
+}
+
+function capSubsPanel(t,lu,by,xi){
+  const slots=E.FORMATIONS[lu.f]; const subs=lu.subs||[];
+  const xiAll=lu.sl.map(id=>by[id]).filter(Boolean);
+  const capList=xiAll.slice().sort((a,b)=>E.capScore(b)-E.capScore(a));
+  const susXI=xiAll.filter(isSus);
+  const mins=[]; for(let m=10;m<=85;m+=5) mins.push(m);
+  const bench=t.players.filter(p=>!lu.sl.includes(p.id)&&!isSus(p));
+  const cur=by[lu.cap];
+  const row=(x,n)=>{ const inList=bench.some(p=>p.id===x.inn)?bench:bench.concat(by[x.inn]?[by[x.inn]]:[]);
+    return `<div class="subrow">
+    <label class="f">Fra<select data-change="subf" data-n="${n}" data-f="m">${mins.map(m=>`<option value="${m}"${x.m===m?' selected':''}>${m===45?'Etter pause':m+'. min'}</option>`).join('')}</select></label>
+    <label class="f">Når<select data-change="subf" data-n="${n}" data-f="c">${Object.entries(E.SUB_COND).map(([k,v])=>`<option value="${k}"${(x.c||'always')===k?' selected':''}>${v}</option>`).join('')}</select></label>
+    <label class="f">Ut<select data-change="subf" data-n="${n}" data-f="out">${xiAll.map(p=>`<option value="${p.id}"${p.id===x.out?' selected':''}>${esc(surname(p))} (${SLOT_CODE[slots[lu.sl.indexOf(p.id)]]})</option>`).join('')}</select></label>
+    <label class="f">Inn<select data-change="subf" data-n="${n}" data-f="inn">${inList.map(p=>`<option value="${p.id}"${p.id===x.inn?' selected':''}>${esc(surname(p))} (${roleOf(p)})</option>`).join('')}</select></label>
+    <label class="f">Posisjon<select data-change="subf" data-n="${n}" data-f="as"><option value="">Samme</option>${E.SUB_SLOTS.map(k=>`<option value="${k}"${x.as===k?' selected':''}>${E.SLOT_NAME[k]}</option>`).join('')}</select></label>
+    <button class="btn sm" data-act="subdel" data-n="${n}" aria-label="Fjern bytte">Fjern</button></div>`; };
+  return `<div class="card"><h3>Kaptein <small>${cur?esc(cur.n):''}</small></h3>
+  ${susXI.length?`<div class="note" style="margin-bottom:12px">${susXI.map(p=>esc(p.n)).join(', ')} er utestengt og blir erstattet automatisk i neste kamp.</div>`:''}
+  <label class="f">Velg kaptein<select data-change="cap">${capList.map(p=>`<option value="${p.id}"${p.id===lu.cap?' selected':''}>${esc(p.n)} – ${E.capLabel(p)}</option>`).join('')}</select></label>
+  <p class="small muted" style="margin:10px 0 0;max-width:60ch">God lederegenskap og erfaring gir en bedre kaptein. En god kaptein løfter hele laget litt, og mest når dere ligger under. Erfaring bygges opp ved at spillerne spiller kamper.</p></div>
+  <div class="card"><h3>Planlagte bytter <small>${subs.length} av 5</small></h3>
+  <p class="small muted" style="margin:0 0 12px;max-width:62ch">Byttet gjøres tidligst ved valgt minutt, og bare hvis betingelsen er oppfylt. For å sette inn en ekstra angriper når dere ligger under, velger du «Ved tap», lar en forsvarsspiller gå ut og velger «Spiss» som posisjon. Du kan bytte inntil fem ganger. Spillere som er byttet ut, kan ikke komme inn igjen.</p>
+  ${subs.length?subs.map(row).join(''):'<div class="empty" style="padding:14px 0">Ingen bytter planlagt.</div>'}
+  <div class="row" style="margin-top:12px"><button class="btn primary" data-act="subadd"${subs.length>=5||lineupLocked()?' disabled':''}>Legg til bytte</button></div></div>`;
+}
+function needTeam(){ return `<div class="card empty">${NO_TEAM_TXT}<div style="margin-top:12px"><button class="btn primary" data-act="tab" data-k="clubs">Gå til Lag</button></div></div>`; }
+
+function sortPlayers(list){
+  const k=S.sortKey; const f={pos:(a,b)=>E.ROLES.indexOf(E.bestRole(a))-E.ROLES.indexOf(E.bestRole(b))||E.ability(b)-E.ability(a), ab:(a,b)=>E.ability(b)-E.ability(a), age:(a,b)=>a.a-b.a, val:(a,b)=>E.value(b)-E.value(a), form:(a,b)=>(b.f||5)-(a.f||5)};
+  if(E.SKI[k]!=null) return list.slice().sort((a,b)=>b.s[E.SKI[k]]-a.s[E.SKI[k]]);
+  return list.slice().sort(f[k]||f.pos);
+}
+function skHead(){ return E.SK.map(k=>`<th class="c" title="${E.SK_NAME[k]}">${E.SK_SHORT[k]}</th>`).join(''); }
+function viewSquad(){
+  const t=myTeam(); if(!t) return needTeam();
+  const list=sortPlayers(t.players); const inXI=new Set((t.lineup&&t.lineup.sl)||[]);
+  const sorts=[['pos','Posisjon'],['ab','Evne'],['age','Alder'],['val','Verdi'],['form','Form'],...E.SK.map(k=>[k,E.SK_NAME[k]])];
+  const wages=t.players.reduce((s,p)=>s+E.wage(p),0);
+  return `<div class="sectionhead"><h2>Spillere</h2><span class="muted small">${t.players.length} spillere · lønn ${kr(wages)} i uka</span></div>
+  <div class="row" style="margin-bottom:12px"><label class="f">Sorter etter<select id="sortkey" data-change="sort">${sorts.map(([k,n])=>`<option value="${k}"${S.sortKey===k?' selected':''}>${n}</option>`).join('')}</select></label></div>
+  <div class="tablewrap"><table><thead><tr><th>Spiller</th><th class="c">Alder</th><th>Posisjon</th>${skHead()}<th class="c">Form</th><th class="r">Verdi</th></tr></thead><tbody>
+  ${list.map(p=>`<tr class="click" data-act="player" data-id="${p.id}"><td><span class="pname">${esc(p.n)}</span>${specBadge(p)}${p.lst?' <span class="tag sale">Til salgs</span>':''}${inXI.has(p.id)?'':' <span class="tag">Benk</span>'}${t.lineup&&t.lineup.cap===p.id?' <span class="tag cap" title="Kaptein">Kaptein</span>':''}${traitBadges(p)}</td><td class="c num">${p.a}</td><td>${roleOf(p)}</td>${E.SK.map(k=>`<td class="c">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td><td class="r num">${kr(E.value(p))}</td></tr>`).join('')}</tbody></table></div>
+  <p class="tiny muted">Trykk på en spiller for detaljer, salg og spesialitet. Alder 17 og eldre kan spille på A-laget. Etter fylte 30 år faller egenskapene gradvis.</p>`;
+}
+
+function viewTrain(){
+  const t=myTeam(); if(!t) return needTeam();
+  const tr=t.training||{a:null,b:null}; const {ks,share}=E.trainShare(t); const lu=t.lineup||E.autoLineup(clone(t));
+  const roles=E.lineupRoles({players:t.players,lineup:lu,training:tr});
+  const opt=(sel,none)=>(none?`<option value=""${!sel?' selected':''}>Ingen</option>`:'')+E.SK.map(k=>`<option value="${k}"${sel===k?' selected':''}>${E.SK_NAME[k]}</option>`).join('');
+  const rel=ks.length?`<div class="card"><h3>Hvem får mest ut av treningen</h3><div class="grid" style="gap:14px">${ks.map(k=>`<div><div class="caps" style="margin-bottom:6px">${E.SK_NAME[k]}</div>${Object.keys(E.ROLE_NAME).map(role=>`<div class="rrow" style="grid-template-columns:90px 1fr 48px"><span class="lab">${E.ROLE_NAME[role]}</span><div class="bar acc"><i style="width:${E.REL[k][role]*100}%"></i></div><span class="val num">${Math.round(E.REL[k][role]*100)}%</span></div>`).join('')}</div>`).join('')}</div></div>`:'';
+  const rows=sortPlayers(t.players).map(p=>{
+    const inLine=!!roles[p.id]; const role=roles[p.id]||E.bestRole(p);
+    const cells=ks.map(k=>{ const i=E.SKI[k]; const lv=p.s[i]; if(lv>=20) return `<td>${sk(lv)} <span class="muted small">Maks</span></td>`;
+      const need=E.cost(lv); const have=p.pr[i]||0; const rate=E.trainingRate(p,k,role,inLine,share); const wk=rate>0.02?Math.max(1,Math.ceil((need-have)/rate)):null;
+      return `<td><div class="row" style="gap:8px;flex-wrap:nowrap">${sk(lv)}<div class="bar" style="width:70px"><i style="width:${Math.min(100,have/need*100)}%"></i></div><span class="small muted num">${wk?'ca. '+wk+' u':'—'}</span></div></td>`; }).join('');
+    return `<tr><td><span class="pname">${esc(p.n)}</span><div class="tiny muted">${E.ROLE_NAME[role]}${inLine?'':' (benk, halv effekt)'} · ${p.a} år</div></td>${cells}</tr>`; }).join('');
+  const log=(t.tl||[]).slice(0,12);
+  return `<div class="sectionhead"><h2>Trening</h2><span class="muted small">Treningen regnes hver tirsdag før kampen</span></div>
+  <div class="card" style="margin-bottom:16px"><div class="row"><label class="f">Hovedtrening<select id="trainA" data-change="trainA">${opt(tr.a,false)}</select></label><label class="f">Ekstra trening<select id="trainB" data-change="trainB">${opt(tr.b,true)}</select></label></div>
+  <p class="small muted" style="margin:12px 0 0;max-width:70ch">${ks.length===2?'Med to treningstyper får hver av dem 60 % effekt. Du trener mer totalt, men hver egenskap utvikler seg saktere.':'Med én treningstype får egenskapen full effekt. Lave nivåer går raskt, høye nivåer tar mange uker. Unge spillere lærer mye fortere enn eldre. En 17-åring trener mer enn dobbelt så fort som en på 25.'}</p></div>
+  <div class="grid g2" style="align-items:start"><div class="tablewrap" style="grid-column:1/-1"><table><thead><tr><th>Spiller</th>${ks.map(k=>`<th>${E.SK_NAME[k]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>${rel}
+  <div class="card"><h3>Siste endringer</h3>${log.length?`<ul class="timeline" style="grid-template-columns:1fr">${log.map(x=>`<li style="grid-template-columns:1fr"><span class="small"><b>${esc(x.p)}</b> <span class="${x.d>0?'up':'down'}">${x.d>0?'+1':'−1'}</span> ${E.SK_NAME[x.k]} (nivå ${x.l})</span></li>`).join('')}</ul>`:`<div class="empty">Ingen endringer ennå.</div>`}</div></div>`;
+}
+
+function marketRows(items){
+  return items.map(it=>{ const p=it.p; const afford=myTeam().money>=it.price; const own=it.from===S.me;
+    return `<tr><td><span class="pname">${esc(p.n)}</span>${specBadge(p)}<div class="tiny muted">${it.from>=0?esc(S.teams[it.from].name):'Fri spiller'} · ${roleOf(p)}</div></td><td class="c num">${p.a}</td>${E.SK.map(k=>`<td class="c">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="r num">${kr(it.price)}</td><td class="r">${own?`<button class="btn sm" data-act="unlist" data-id="${p.id}">Trekk tilbake</button>`:`<button class="btn sm primary" data-act="buy" data-id="${p.id}"${afford?'':' disabled'}>Kjøp</button>`}</td></tr>`; }).join('');
+}
+function viewMarket(){
+  const t=myTeam(); if(!t) return needTeam();
+  const m=S.market; if(!m) return `<div class="empty">Laster markedet…</div>`;
+  const all=m.items.map(it=>({...it,p:it.from>=0?(S.teams[it.from]&&S.teams[it.from].players.find(x=>x.id===it.id)):it.pl})).filter(it=>it.p);
+  const f=S.mf; let items=all.filter(it=>it.from!==S.me);
+  if(f.pos) items=items.filter(it=>E.bestRole(it.p)===f.pos);
+  items=items.filter(it=>it.p.a<=f.maxAge);
+  const sorters={price:(a,b)=>a.price-b.price, ab:(a,b)=>E.ability(b.p)-E.ability(a.p), age:(a,b)=>a.p.a-b.p.a};
+  items.sort(sorters[f.sort]||sorters.price);
+  const mine=all.filter(it=>it.from===S.me);
+  const filt=`<div class="row" style="margin-bottom:12px"><label class="f">Posisjon<select id="mfpos" data-change="mfpos"><option value="">Alle</option>${E.ROLES.map(r=>`<option value="${r}"${f.pos===r?' selected':''}>${E.ROLE_NAME[r]}</option>`).join('')}</select></label>
+  <label class="f">Maks alder<select id="mfage" data-change="mfage">${[40,34,30,26,23,20].map(a=>`<option value="${a}"${f.maxAge===a?' selected':''}>${a===40?'Alle':a+' år'}</option>`).join('')}</select></label>
+  <label class="f">Sorter<select id="mfsort" data-change="mfsort"><option value="price"${f.sort==='price'?' selected':''}>Pris</option><option value="ab"${f.sort==='ab'?' selected':''}>Evne</option><option value="age"${f.sort==='age'?' selected':''}>Alder</option></select></label></div>`;
+  const head=`<thead><tr><th>Spiller</th><th class="c">Alder</th>${skHead()}<th class="r">Pris</th><th></th></tr></thead>`;
+  return `<div class="sectionhead"><h2>Marked</h2><span class="muted small">Kasse ${kr(t.money)} · Nye spillere hver tirsdag, annonser varer i to uker</span></div>${filt}
+  <div class="tablewrap">${items.length?`<table>${head}<tbody>${marketRows(items)}</tbody></table>`:`<div class="empty">Ingen spillere passer filteret.</div>`}</div>
+  ${mine.length?`<div class="sectionhead" style="margin-top:24px"><h2>Dine spillere til salgs</h2></div><div class="tablewrap"><table>${head}<tbody>${marketRows(mine)}</tbody></table></div>`:''}
+  <div class="card" style="margin-top:20px"><h3>Siste handler</h3>${(m.log||[]).length?`<ul class="timeline" style="grid-template-columns:1fr">${m.log.slice(0,10).map(x=>`<li style="grid-template-columns:1fr"><span class="small">${esc(x.t)}</span></li>`).join('')}</ul>`:`<div class="empty">Ingen handler ennå.</div>`}</div>`;
+}
+
+function viewTable(){
+  const L=S.league; const order=E.tableOrder(L.tb);
+  const scorers=S.teams.flatMap(t=>t.players.map(p=>({n:p.n,t:t.i,g:p.gl||0}))).filter(x=>x.g>0).sort((a,b)=>b.g-a.g).slice(0,8);
+  const rows=order.map((o,k)=>{ const t=S.teams[o.t]; return `<tr class="${t.owner&&t.owner===S.uid?'me':''}"><td class="num">${k+1}</td><td><span class="row" style="gap:8px;flex-wrap:nowrap">${crest(t,20)}<span>${esc(t.name)}</span>${t.owner?`<span class="tag human">${esc(mgrName(t))}</span>`:''}</span></td><td class="r num">${o.p}</td><td class="r num">${o.w}</td><td class="r num">${o.d}</td><td class="r num">${o.l}</td><td class="r num">${o.gf}–${o.ga}</td><td class="r num">${o.gd>0?'+':''}${o.gd}</td><td class="r num"><b>${o.pts}</b></td></tr>`; }).join('');
+  return `<div class="sectionhead"><h2>Tabell</h2><span class="muted small">Sesong ${L.s}</span></div>
+  <div class="tablewrap"><table><thead><tr><th>#</th><th>Lag</th><th class="r">K</th><th class="r">V</th><th class="r">U</th><th class="r">T</th><th class="r">Mål</th><th class="r">+/-</th><th class="r">P</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="grid g2" style="margin-top:16px"><div class="card"><h3>Toppscorere</h3>${scorers.length?`<table><tbody>${scorers.map(s=>`<tr><td>${esc(s.n)}</td><td class="muted">${esc(S.teams[s.t].name)}</td><td class="r num"><b>${s.g}</b></td></tr>`).join('')}</tbody></table>`:`<div class="empty">Ingen mål ennå.</div>`}</div>
+  <div class="card"><h3>Tidligere mestere</h3>${L.hist.length?`<table><tbody>${L.hist.slice().reverse().map(h=>`<tr><td class="muted">Sesong ${h.s}</td><td><b>${esc(h.name)}</b></td><td class="r num">${h.pts} p</td></tr>`).join('')}</tbody></table>`:`<div class="empty">Første sesong pågår.</div>`}</div></div>`;
+}
+
+function fxRow(m,me){
+  const H=S.teams[m.h], A=S.teams[m.a]; const mine=m.h===me||m.a===me;
+  return `<button class="fx${mine?' me':''}" data-act="match" data-r="${m.__r!=null?m.__r:''}" data-h="${m.h}"><span class="t">${crest(H,20)}<span>${esc(H.name)}</span></span><span class="sc num">${m.hg} – ${m.ag}</span><span class="t a">${crest(A,20)}<span>${esc(A.name)}</span></span></button>`;
+}
+function statsHtml(m,H,A){
+  return `<div class="grid g2" style="gap:20px;margin-top:16px"><div><div class="caps" style="margin-bottom:8px">Statistikk</div><dl class="kv small"><dt>Formasjon</dt><dd>${m.hf} mot ${m.af}</dd><dt>Ballbesittelse</dt><dd>${m.hp} % – ${100-m.hp} %</dd><dt>Skudd og dødballer</dt><dd>${m.hs} – ${m.as}</dd>${m.cd?`<dt>Gule kort</dt><dd>${m.cd.filter(c=>c.k==='y'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='y'&&c.s==='a').length}</dd><dt>Røde kort</dt><dd>${m.cd.filter(c=>c.k==='r'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='r'&&c.s==='a').length}</dd>`:''}</dl></div>
+  <div><div class="caps" style="margin-bottom:8px">Ratinger</div><table><thead><tr><th></th><th class="r">${esc(H.short)}</th><th class="r">${esc(A.short)}</th></tr></thead><tbody>${E.SEC.map((s,i)=>`<tr><td>${E.SEC_NAME[s]}</td><td class="r num">${m.hr[i].toFixed(1)}</td><td class="r num">${m.ar[i].toFixed(1)}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function feedHtml(list){
+  return `<ul class="feed">${list.map(e=>{ const g=!!E.GOAL_KINDS[e.k]; const chip=e.k==='yc'?'<i class="kort y"></i> ':e.k==='rc'?'<i class="kort r"></i> ':''; return `<li class="${g?'goal':''}${(e.k==='st'||e.k==='sub'||e.k==='c')?' sys':''}${e.k==='rc'?' red':''}"><span class="min num">${esc(e.lab||'')}</span><span class="tx">${g?'<b>MÅL!</b> ':''}${chip}${esc(e.tx)}${e.sc?` <span class="muted">(${e.sc[0]}–${e.sc[1]})</span>`:''}</span></li>`; }).join('')}</ul>`;
+}
+function scoreHead(H,A,lv,size){
+  const sc=lv.st==='before'?'– –':lv.score[0]+' – '+lv.score[1];
+  const st=lv.st==='before'?'':lv.st==='done'?'Slutt':lv.label;
+  return `<div class="scoreline"><div class="tm">${crest(H,size||34)}<b>${esc(H.name)}</b></div><div style="text-align:center"><span class="score">${sc}</span><div class="small muted">${st}</div></div><div class="tm away">${crest(A,size||34)}<b>${esc(A.name)}</b></div></div>`;
+}
+function liveCard(doc,m){
+  const H=S.teams[m.h],A=S.teams[m.a]; const lv=liveOf(m,doc);
+  const feed=lv.vis.slice(-6).reverse();
+  return `<div class="card"><h3>Direkte <small>${lv.st==='before'?'Avspark '+fmtTime(doc.t):lv.st==='done'?'Slutt':lv.label}</small></h3>${scoreHead(H,A,lv,30)}
+  ${feed.length?feedHtml(feed):''}<div class="row" style="margin-top:12px"><button class="btn primary" data-act="match" data-r="${doc.r}" data-h="${m.h}">Følg kampen</button></div></div>`;
+}
+function gameRow(m,doc,me,r){
+  const H=S.teams[m.h], A=S.teams[m.a]; const lv=liveOf(m,doc); const mine=m.h===me||m.a===me;
+  const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}`;
+  const sub=(lv.st==='live'||lv.st==='break')?`<small class="live">${lv.label}</small>`:'';
+  return `<button class="fx${mine?' me':''}${S.watch&&S.watch.r===r&&S.watch.h===m.h?' sel':''}" data-act="match" data-r="${r}" data-h="${m.h}"><span class="t">${crest(H,20)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}${sub}</span><span class="t a">${crest(A,20)}<span>${esc(A.name)}</span></span></button>`;
+}
+function viewGames(){
+  const L=S.league; const t=myTeam(); const me=t?t.i:-1;
+  if(S.round==null) S.round=L.ph?L.r:Math.max(0,L.r-1);
+  const r=S.round; const doc=S.rounds[r];
+  const when=doc?doc.t:E.slotTime(L.anchor, L.g+(r-L.r));
+  let body, panel='';
+  if(doc){
+    let ms=doc.m; if(S.mine&&t) ms=ms.filter(m=>m.h===me||m.a===me);
+    body=`<div class="card" style="padding:0;overflow:hidden">${ms.map(m=>gameRow(m,doc,me,r)).join('')}</div>`;
+    let w=S.watch&&S.watch.r===r?doc.m.find(m=>m.h===S.watch.h):null;
+    if(!w){ w=doc.m.find(m=>m.h===me||m.a===me)||doc.m[0]; S.watch={r,h:w.h}; }
+    panel=matchPanel(doc,w);
+  } else {
+    let ps=L.fx[r]; if(S.mine&&t) ps=ps.filter(p=>p[0]===me||p[1]===me);
+    body=`<div class="card" style="padding:0;overflow:hidden">${ps.map(p=>`<div class="fx${(p[0]===me||p[1]===me)?' me':''}" style="cursor:default"><span class="t">${crest(S.teams[p[0]],20)}<span>${esc(S.teams[p[0]].name)}</span></span><span class="sc muted">–</span><span class="t a">${crest(S.teams[p[1]],20)}<span>${esc(S.teams[p[1]].name)}</span></span></div>`).join('')}</div>`;
+  }
+  const status=doc?(doc.live?'pågår':'ferdig'):'ikke spilt';
+  return `<div class="sectionhead"><h2>Kamper</h2><span class="muted small">Sesong ${L.s}</span></div>
+  <div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="rnd" data-d="-1"${r<=0?' disabled':''}>Forrige</button><b class="num">Runde ${r+1} av ${E.ROUNDS}</b><button class="btn sm" data-act="rnd" data-d="1"${r>=E.ROUNDS-1?' disabled':''}>Neste</button><span class="muted small">${fmtTime(when)} · ${status}</span><span class="spacer"></span>${t?`<button class="btn sm" data-act="mine" aria-pressed="${S.mine}">${S.mine?'Vis alle kamper':'Bare mine kamper'}</button>`:''}</div>${body}${panel}`;
+}
+function matchPanel(doc,m){
+  const H=S.teams[m.h],A=S.teams[m.a]; const lv=liveOf(m,doc);
+  const feed=lv.vis.slice().reverse();
+  return `<div class="card" style="margin-top:16px">${scoreHead(H,A,lv,40)}
+  <div class="caps" style="margin:16px 0 8px">Direkte fra banen</div>${feed.length?feedHtml(feed):`<div class="empty">Avspark ${fmtTime(doc.t)}. Kommentarene dukker opp her mens kampen pågår.</div>`}${lv.st==='done'?statsHtml(m,H,A):''}</div>`;
+}
+
+function viewClubs(){
+  const L=S.league; const t=myTeam();
+  const order=E.tableOrder(L.tb).map(o=>o.t);
+  return `<div class="sectionhead"><h2>Lag</h2><span class="muted small">${S.teams.filter(x=>x&&x.owner).length} av ${E.N_TEAMS} lag har menneskelig manager</span></div>
+  ${t?'':`<div class="note" style="margin-bottom:16px">${S.canWrite===false?'Du har bare lesetilgang.':!S.uid?'Du må være logget inn for å ta over et lag.':'Trykk «Ta over laget» på et datastyrt lag for å bli manager.'}</div>`}
+  <div class="teamgrid">${order.map(i=>clubCard(S.teams[i])).join('')}</div>`;
+}
+
+function viewHelp(){
+  return `<div class="sectionhead"><h2>Regler</h2></div><div class="card help">
+  <h3>Liga og kamper</h3><ul><li>14 lag i én divisjon. Alle møter alle to ganger, så en sesong er 26 runder.</li><li>Alle lag spiller tre ganger i uka: tirsdag, fredag og søndag klokka 18.00 norsk tid.</li><li>Kampene spilles i sanntid: 45 minutter pluss tilleggstid, 15 minutter pause og så 45 minutter pluss tilleggstid. Er du inne på siden mens kampen pågår, får du kommentarer og beskjed om mål underveis.</li><li>Oppstillingen låses ved avspark og åpnes igjen når alle kamper er ferdige. Tabellen oppdateres først da.</li><li>Lag uten menneskelig manager styres av datamaskinen. Når du tar over et lag, erstatter du datamaskinen og beholder spillerne.</li><li>Spillet kjører ikke på noen server. Første som åpner siden etter avspark setter kampene i gang, og alle ser det samme med riktig klokkeslett. Kommer du inn midt i kampen, ser du først det som har skjedd så langt.</li></ul>
+  <h3>Spillere og egenskaper</h3><ul><li>Alle spillere er fantasispillere. På A-laget kan spillere være 17 år og eldre.</li><li>Sju egenskaper fra 0 til 20: Keeper, Forsvar, Midtbane, Pasning, Ving, Scoring og Dødballer.</li><li>Fra 30 år mister spillerne gradvis nivå, raskere jo eldre de blir. Ving og forsvar faller først, dødballer og keeper holder lengst.</li><li>Etter hver sesong blir alle ett år eldre, de eldste legger opp, og hvert lag får to nye ungdomsspillere på 17 år.</li></ul>
+  <h3>Trening</h3><ul><li>Velg én eller to egenskaper. Med to får hver av dem 60 % effekt.</li><li>Trening av forsvar gir mye til forsvarere og backer, litt til midtbane og lite til spisser. Det samme prinsippet gjelder for de andre egenskapene.</li><li>Lave nivåer går fort. Hvert nivå krever omtrent 16 % mer trening enn det forrige. Spillere fra 17 til 22 år trener opptil 2,2 ganger så fort som voksne. Spillere som ikke er med i startellveren trener med halv effekt.</li></ul>
+  <h3>Ratinger og oppstilling</h3><ul><li>Spillernes egenskaper gir sju ratinger: forsvar venstre, midten og høyre, midtbane, og angrep venstre, midten og høyre.</li><li>Backer og ving bidrar mest på sin egen side. Midtbane styrer midtbanen og hjelper midtforsvaret og midtangrepet. Pasning bidrar til angrep, men mindre enn scoring for spisser og ving for vinger.</li><li>Du kan sende en spiller i en bestemt retning. En defensiv midtbane gir mer forsvar men mindre angrep, og «Mot venstre» flytter noe av innsatsen ut på kanten.</li><li>Formen går opp og ned fra uke til uke og påvirker alle ratingene.</li></ul>
+  <h3>Personlighet, erfaring og kaptein</h3><ul><li>Spillerne har temperament, lederegenskap og noen har en spillestil: Lagspiller, Individualist, Kjemper eller Fair spiller. Du ser det på spillerkortet.</li><li>Erfaring bygges opp ved at spillerne spiller kamper. Lederegenskap og erfaring avgjør hvor godt egnet en spiller er som kaptein.</li><li>En god kaptein løfter alle ratingene litt, og mest når laget ligger under. Spilles kapteinen av banen, tar den beste på banen over med litt mindre effekt.</li></ul>
+  <h3>Kort og utestengelse</h3><ul><li>Temperamentsfulle spillere forårsaker lettere frispark og får oftere gult kort.</li><li>To gule kort i samme kamp gir rødt kort. Rødt kort er sjeldent, og laget må spille resten av kampen med ti mann.</li><li>Rødt kort gir én kamps utestengelse. Det samme gjelder tre gule kort i ulike kamper.</li></ul>
+  <h3>Bytter</h3><ul><li>Hvert lag kan bytte inntil fem spillere i løpet av en kamp. Du planlegger dem i Oppstilling: velg minutt, betingelse (alltid, ved tap, ved ledelse eller ved uavgjort), hvem som går ut og inn, og eventuelt ny posisjon.</li><li>Eksempel: ved tap fra 60. minutt går en midtstopper ut og en ekstra spiss kommer inn. Ved ledelse kan du gjøre det motsatte.</li></ul>
+  <h3>Spesialiteter</h3><ul>${Object.keys(E.SPEC).map(k=>`<li><b>${E.SPEC[k]}:</b> ${E.SPEC_INFO[k]}</li>`).join('')}</ul>
+  <h3>Økonomi og marked</h3><ul><li>Hver uke får laget sponsorinntekter, og hver hjemmekamp gir billettinntekter. Lønningene trekkes hver uke.</li><li>Nye spillere dukker opp på markedet hver tirsdag. Du kan også legge ut dine egne spillere til en pris du velger, eller selge dem raskt til speiderne for 45 % av verdien.</li><li>De tre beste lagene får premiepenger når sesongen er over.</li></ul></div>`;
+}
+
+/* ---------- modaler ---------- */
+function openModal(html){ const o=$('#modal'); o.innerHTML=`<div class="ov" data-act="closeov"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; }
+function closeModal(){ $('#modal').innerHTML=''; }
+function playerModal(id){
+  const t=myTeam(); const p=t&&t.players.find(x=>x.id===id); if(!p) return;
+  const v=E.value(p); const lu=t.lineup; const roles=t.lineup?E.lineupRoles({players:t.players,lineup:t.lineup}):{};
+  const tr=E.trainShare(t).ks;
+  const skillRows=E.SK.map(k=>{ const i=E.SKI[k]; const lv=p.s[i]; const trained=tr.includes(k);
+    return `<div class="rrow" style="grid-template-columns:110px 1fr 34px"><span class="lab">${E.SK_NAME[k]}</span><div class="bar${trained?' acc':''}"><i style="width:${lv/20*100}%"></i></div><span class="val num">${lv}</span></div>`; }).join('');
+  openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>${esc(p.n)}</h3><p class="muted" style="margin:4px 0 14px">${p.a} år · ${roleOf(p)} · form ${p.f||5} av 8 (${FORM_LABEL[p.f||5].toLowerCase()}) · ${p.gl||0} mål denne sesongen</p>
+  ${p.sp?`<p class="small"><span class="spec">${E.SPEC[p.sp]}</span> ${esc(E.SPEC_INFO[p.sp])}</p>`:''}
+  <div class="ratings" style="margin:12px 0">${skillRows}</div>
+  <dl class="kv small"><dt>Temperament</dt><dd>${E.tmLabel(E.tmOf(p))} (${E.tmOf(p)} av 10)</dd><dt>Lederegenskap</dt><dd>${E.ldLabel(E.ldOf(p))} (${E.ldOf(p)} av 10)</dd><dt>Erfaring</dt><dd>${E.expLabel(E.expLevel(p))} (${(p.xp||0)} kamper)</dd><dt>Spillestil</dt><dd>${p.sy?`${E.STYLE[p.sy]}. ${esc(E.STYLE_INFO[p.sy])}`:'Ingen spesiell'}</dd><dt>Som kaptein</dt><dd>${E.capLabel(p)}</dd><dt>Gule kort</dt><dd>${p.yc||0} av 3${isSus(p)?' · <b>utestengt neste kamp</b>':''}</dd></dl>
+  <dl class="kv small" style="margin-top:10px"><dt>Verdi</dt><dd>${kr(v)}</dd><dt>Lønn per uke</dt><dd>${kr(E.wage(p))}</dd><dt>Lynsalg til speidere</dt><dd>${kr(Math.round(v*0.45/1000)*1000)}</dd></dl>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  ${p.lst?`<p>Til salgs for <b>${kr(p.lst)}</b>.</p><button class="btn" data-act="unlist" data-id="${p.id}">Trekk tilbake fra markedet</button>`:`<div class="row"><label class="f">Pris på markedet (kr)<input type="number" id="salePrice" min="5000" step="1000" value="${v}"></label><button class="btn primary" data-act="list" data-id="${p.id}" style="align-self:flex-end">Legg ut for salg</button><button class="btn danger" data-act="quicksell" data-id="${p.id}" style="align-self:flex-end">Selg til speidere</button></div>`}`);
+}
+function renameModal(i){
+  const t=S.teams[i]; openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>Endre klubbnavn</h3><div class="row" style="margin-top:14px"><label class="f">Navn<input type="text" id="newName" maxlength="28" value="${esc(t.name)}"></label><button class="btn primary" data-act="dorename" data-i="${i}" style="align-self:flex-end">Lagre</button></div>`);
+}
+
+/* ---------- tegning ---------- */
+function render(){
+  const act=document.activeElement;
+  if(act && act.matches && act.matches('#modal input, #view input[type=text], #view input[type=number]')){ S.pendingRender=true; return; }
+  S.pendingRender=false;
+  $('#top').innerHTML=topbar();
+  $('#tabs').innerHTML=tabsBar();
+  const v=$('#view');
+  if(!S.ready){ v.innerHTML=`<div class="empty">Laster ligaen…</div>`; return; }
+  if(!S.league || !teamOk()){ v.innerHTML=`<div class="empty">${S.canWrite===false?'Ligaen er ikke opprettet ennå. Be eieren om å åpne siden først.':'Oppretter ligaen med 14 lag…'}</div>`; return; }
+  const views={home:viewHome,lineup:viewLineup,squad:viewSquad,train:viewTrain,market:viewMarket,table:viewTable,games:viewGames,clubs:viewClubs,help:viewHelp};
+  const sy=window.scrollY;
+  try{ v.innerHTML=views[S.tab](); }catch(e){ console.error(e); v.innerHTML=`<div class="empty">Noe gikk galt under visningen. Prøv å bytte fane.</div>`; }
+  if(sy) window.scrollTo(0,sy);
+}
+let rq=null; function requestRender(){ if(rq) return; rq=requestAnimationFrame(()=>{ rq=null; render(); }); }
+
+/* ---------- handlinger ---------- */
+function fixOrders(lu){ const slots=E.FORMATIONS[lu.f]; lu.o=slots.map((st,i)=>{ const o=(lu.o&&lu.o[i])||'normal'; return E.ordersFor(st).includes(o)?o:'normal'; }); }
+function saveLU(lu){ if(lineupLocked()){ toast('Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.',true); requestRender(); return; } const t=myTeam(); fixOrders(lu); { const by=E.mapById(t.players); if(!lu.cap||!lu.sl.includes(lu.cap)) lu.cap=E.bestCaptainId(by,lu.sl); const n0=(lu.subs||[]).length; lu.subs=(lu.subs||[]).filter(x=>lu.sl.includes(x.out)&&by[x.inn]&&!lu.sl.includes(x.inn)); if(lu.subs.length<n0) toast('Noen planlagte bytter passet ikke lenger og er fjernet.'); } S.teams[S.me]={...t,lineup:lu}; requestRender(); return run(()=>S.store.saveLineup(S.me,lu)); }
+const actions={
+  tab(el){ S.tab=el.dataset.k; try{ localStorage.setItem('lm-tab',S.tab); }catch(e){} render(); window.scrollTo(0,0); },
+  selslot(el){ S.sel=+el.dataset.i; render(); },
+  assign(el){ const t=myTeam(); { const q=t.players.find(x=>x.id===el.dataset.id); if(q&&isSus(q)){ toast(q.n+' er utestengt og kan ikke spille neste kamp.',true); return; } } const lu=clone(t.lineup); const i=S.sel; const id=el.dataset.id; const j=lu.sl.indexOf(id); const old=lu.sl[i]; if(old===id) return; lu.sl[i]=id; if(j>=0){ lu.sl[j]=old; lu.o[j]='normal'; } lu.o[i]='normal'; if(!lu.tk) lu.tk=E.bestTaker(t.players,lu.sl); saveLU(lu); },
+  order(el){ const t=myTeam(); const lu=clone(t.lineup); lu.o[S.sel]=el.dataset.o; saveLU(lu); },
+  auto(){ const t=myTeam(); const c=clone(t); c.ai=null; const lu=E.autoLineup(c); saveLU(lu); toast('Oppstillingen er satt opp automatisk.'); },
+  claim(el){ const t=S.teams[+el.dataset.i]; openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>Ta over ${esc(t.name)}</h3><p class="muted small" style="margin:4px 0 14px">Du kan gi klubben et nytt navn nå, eller beholde det gamle. Du kan også endre det senere.</p><div class="row"><label class="f">Klubbnavn<input type="text" id="claimName" maxlength="28" value="${esc(t.name)}"></label><button class="btn primary" data-act="doclaim" data-i="${t.i}" style="align-self:flex-end">Bli manager</button></div>`); setTimeout(()=>{ const i=$('#claimName'); if(i){ i.focus(); i.select(); } },0); },
+  doclaim(el){ const v=$('#claimName').value; closeModal(); run(()=>S.store.claimTeam(+el.dataset.i,v),'Du er nå manager. Lykke til!').then(()=>{ S.tab='home'; }); },
+  subadd(){ const t=myTeam(); const lu=clone(t.lineup); lu.subs=lu.subs||[]; if(lu.subs.length>=5) return; const by=E.mapById(t.players); const usedOut=new Set(lu.subs.map(x=>x.out)), usedIn=new Set(lu.subs.map(x=>x.inn)); const slots=E.FORMATIONS[lu.f];
+    let oi=-1,ov=1e9; lu.sl.forEach((id,i)=>{ const p=by[id]; if(!p||slots[i]==='GK'||usedOut.has(id)) return; const v=E.slotScore(p,slots[i]); if(v<ov){ov=v;oi=i;} });
+    const bench=t.players.filter(p=>!lu.sl.includes(p.id)&&!isSus(p)&&!usedIn.has(p.id)); if(oi<0||!bench.length){ toast('Du trenger en ledig spiller på benken og en spiller å bytte ut.',true); return; }
+    bench.sort((a,b)=>E.slotScore(b,slots[oi])-E.slotScore(a,slots[oi]));
+    lu.subs.push({m:60,c:'always',out:lu.sl[oi],inn:bench[0].id,as:null}); saveLU(lu); },
+  subdel(el){ const t=myTeam(); const lu=clone(t.lineup); (lu.subs||[]).splice(+el.dataset.n,1); saveLU(lu); },
+  release(el){ openModal(`<h3>Gi fra deg laget?</h3><p>Datamaskinen tar over ${esc(S.teams[+el.dataset.i].name)} og du står uten lag.</p><div class="row"><button class="btn danger" data-act="dorelease" data-i="${el.dataset.i}">Ja, gi fra meg</button><button class="btn" data-act="closemodal">Avbryt</button></div>`); },
+  dorelease(el){ closeModal(); run(()=>S.store.releaseTeam(+el.dataset.i),'Laget er gitt tilbake til datamaskinen.'); },
+  rename(el){ renameModal(+el.dataset.i); },
+  dorename(el){ const v=$('#newName').value; closeModal(); run(()=>S.store.renameTeam(+el.dataset.i,v),'Klubbnavnet er endret.'); },
+  player(el){ playerModal(el.dataset.id); },
+  match(el){ S.tab='games'; S.round=+el.dataset.r; S.watch={r:+el.dataset.r,h:+el.dataset.h}; render(); window.scrollTo(0,0); },
+  closemodal(){ closeModal(); if(S.pendingRender) render(); },
+  closeov(el,ev){ if(ev.target===el) closeModal(); },
+  rnd(el){ S.round=Math.max(0,Math.min(E.ROUNDS-1,(S.round==null?0:S.round)+(+el.dataset.d))); render(); },
+  mine(){ S.mine=!S.mine; render(); },
+  buy(el){ const id=el.dataset.id; run(()=>S.store.buy(id,S.me),p=>'Du har kjøpt '+p.n+'.'); },
+  unlist(el){ closeModal(); run(()=>S.store.unlistPlayer(S.me,el.dataset.id),'Spilleren er tatt av markedet.'); },
+  list(el){ const price=+($('#salePrice').value); closeModal(); run(()=>S.store.listPlayer(S.me,el.dataset.id,price),'Spilleren er lagt ut for salg.'); },
+  quicksell(el){ closeModal(); run(()=>S.store.quickSell(S.me,el.dataset.id),p=>'Spilleren er solgt for '+kr(p)+'.'); }
+};
+const changes={
+  formation(el){ const t=myTeam(); const lu=clone(t.lineup); const by=E.mapById(t.players); const xi=lu.sl.map(id=>by[id]).filter(Boolean); lu.f=el.value; lu.sl=E.assignFormation(xi,el.value); lu.o=lu.sl.map(()=> 'normal'); lu.tk=E.bestTaker(t.players,lu.sl); S.sel=Math.min(S.sel,10); saveLU(lu); },
+  cap(el){ const t=myTeam(); const lu=clone(t.lineup); lu.cap=el.value; saveLU(lu); },
+  subf(el){ const t=myTeam(); const lu=clone(t.lineup); const x=(lu.subs||[])[+el.dataset.n]; if(!x) return; const f=el.dataset.f; x[f]= f==='m'?+el.value : f==='as'?(el.value||null) : el.value; if(x.out===x.inn){ toast('Spilleren som går ut og inn må være ulike.',true); render(); return; } saveLU(lu); },
+  taker(el){ const t=myTeam(); const lu=clone(t.lineup); lu.tk=el.value; saveLU(lu); },
+  sort(el){ S.sortKey=el.value; render(); },
+  trainA(el){ const t=myTeam(); const tr={a:el.value||null,b:(t.training&&t.training.b)||null}; if(tr.b===tr.a) tr.b=null; S.teams[S.me]={...t,training:tr}; requestRender(); run(()=>S.store.saveTraining(S.me,tr),'Treningen er lagret.'); },
+  trainB(el){ const t=myTeam(); const tr={a:(t.training&&t.training.a)||null,b:el.value||null}; if(tr.b&&tr.b===tr.a){ toast('Velg en annen egenskap enn hovedtreningen.',true); render(); return; } S.teams[S.me]={...t,training:tr}; requestRender(); run(()=>S.store.saveTraining(S.me,tr),'Treningen er lagret.'); },
+  mfpos(el){ S.mf.pos=el.value; render(); }, mfage(el){ S.mf.maxAge=+el.value; render(); }, mfsort(el){ S.mf.sort=el.value; render(); }
+};
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const f=actions[el.dataset.act]; if(f){ ev.preventDefault(); f(el,ev); } });
+document.addEventListener('change',ev=>{ const el=ev.target.closest('[data-change]'); if(!el) return; const f=changes[el.dataset.change]; if(f) f(el); });
+document.addEventListener('focusout',()=>{ setTimeout(()=>{ if(S.pendingRender) render(); },50); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Enter' && (ev.target.id==='claimName'||ev.target.id==='newName')){ const b=$('#modal .btn.primary'); if(b) b.click(); } if(ev.key==='Escape' && $('#modal').firstChild) closeModal(); });
+
+/* ---------- oppstart ---------- */
+function afterTeams(){
+  const i=S.teams.findIndex(t=>t&&t.owner&&t.owner===S.uid); S.me=(S.uid&&i>=0)?i:null;
+  const ids=[...new Set(S.teams.filter(t=>t&&t.owner).map(t=>t.owner))];
+  if(S.user && ids.length){ S.user.profiles(ids).then(ps=>{ let ch=false; ids.forEach(id=>{ const n=(ps[id]&&ps[id].name)||''; if(n && S.names[id]!==n){ S.names[id]=n; ch=true; } if(ps[id]&&ps[id].isMe&&n) S.myName=n; }); if(ch) requestRender(); }).catch(()=>{}); }
+}
+let unsubRounds=null, roundsSeason=null;
+function watchRounds(db){
+  const s=S.league&&S.league.s; if(!s||s===roundsSeason) return; roundsSeason=s; if(unsubRounds) unsubRounds(); S.rounds={};
+  unsubRounds=db.collection('rounds').where('s','==',s).onSnapshot(q=>{ const m={}; q.docs.forEach(d=>{ const v=d.data(); if(v) m[v.r]=v; }); S.rounds=m; requestRender(); },e=>console.warn(e));
+}
+function needTick(){
+  const L=S.league; if(!L) return false; const now=Date.now();
+  if(!L.ph) return now>=E.slotTime(L.anchor,L.g);
+  const d=S.rounds[L.r]; return d?now>=d.end:false;
+}
+async function maybeTick(){
+  if(S.ticking||!S.store||!S.league||S.canWrite===false||!needTick()) return;
+  S.ticking=true;
+  try{ await S.store.tick(); }
+  catch(e){ console.warn(e); } finally{ S.ticking=false; }
+}
+function liveTick(){
+  if(!S.ready||!S.league) return;
+  maybeTick();
+  const doc=roundDoc(); const t=myTeam();
+  if(doc){
+    doc.m.forEach(m=>{
+      const key=doc.s+'-'+doc.r+'-'+m.h; const lv=liveOf(m,doc); const prev=S.seen[key];
+      if(prev==null){ S.seen[key]=lv.vis.length; return; }
+      if(lv.vis.length>prev){
+        if(t&&(m.h===t.i||m.a===t.i)) lv.vis.slice(prev).forEach(e=>{
+          if(E.GOAL_KINDS[e.k]) toast(`${e.lab} MÅL for ${S.teams[e.s==='h'?m.h:m.a].name}! ${e.p}. Stillingen er ${e.sc[0]}–${e.sc[1]}.`);
+          else if(e.k==='st' && /Pause|blåser av/.test(e.tx)) toast(e.tx);
+        });
+        S.seen[key]=lv.vis.length;
+      }
+    });
+  }
+  const sig=doc?doc.m.map(m=>{ const lv=liveOf(m,doc); return lv.st+lv.vis.length+(S.watch&&S.watch.h===m.h?lv.label:''); }).join('|'):'';
+  if(sig!==S.liveSig){ S.liveSig=sig; if(['home','games','lineup'].includes(S.tab)) requestRender(); else $('#top').innerHTML=topbar(); }
+}
+async function boot(){
+  try{ const t=localStorage.getItem('lm-tab'); if(t && TABS.some(x=>x[0]===t)) S.tab=t; }catch(e){}
+  render();
+  const cl=window.claude; const db=cl?await cl.use('db'):null; const user=cl?await cl.use('user'):null;
+  if(!db){ $('#view').innerHTML=`<div class="empty">Spillet trenger lagring i Claude. Åpne siden i Claude for å spille.</div>`; return; }
+  S.user=user; S.uid=user?await user.id():null; S.canWrite=user?await user.can('data.write'):null;
+  if(user){ try{ const me=await user.me(); S.myName=me.name||''; }catch(e){} }
+  S.store=makeStore({db,uid:S.uid});
+  db.doc('league/main').onSnapshot(snap=>{
+    S.league=snap.exists?snap.data():null; S.ready=true;
+    if(!snap.exists && !snap.metadata.fromCache && S.canWrite!==false && S.uid){ S.store.ensureInit().catch(e=>toast('Kunne ikke opprette ligaen: '+e.message,true)); }
+    if(S.league){ watchRounds(db); maybeTick(); }
+    requestRender();
+  },e=>console.warn(e));
+  db.collection('teams').onSnapshot(q=>{ const arr=new Array(E.N_TEAMS).fill(null); q.docs.forEach(d=>{ const t=d.data(); if(t&&typeof t.i==='number') arr[t.i]=t; }); S.teams=arr; afterTeams(); requestRender(); },e=>console.warn(e));
+  db.doc('market/current').onSnapshot(snap=>{ S.market=snap.exists?snap.data():null; requestRender(); },e=>console.warn(e));
+  setInterval(liveTick,2000);
+  setInterval(()=>{ if(S.ready && S.league){ $('#top').innerHTML=topbar(); } },30000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) maybeTick(); });
+}
+window.__lm={S,E,render,boot};
+if(!window.__deferBoot) boot();
+})();
+
+</script>
+</body>
+</html>
