@@ -436,6 +436,7 @@ const SHOOT_W = {FC:1, AL:.5, AR:.5, WL:.35, WR:.35, MC:.22, DL:.04, DR:.04, DC:
 const ASSIST_W = {MC:1, WL:.9, WR:.9, AL:.9, AR:.9, FC:.5, DL:.35, DR:.35, DC:.15, GK:0};
 const PEN_W = {GK:.5, DC:1.3, DL:1, DR:1, MC:.7, WL:.3, WR:.3, AL:.2, AR:.2, FC:.2};
 const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, FC:.6};
+const PG0 = 0.31, PGK = 1.0, RD_ = 0.5;
 const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
 const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
 function fm(p){ return formMult(p); }
@@ -533,15 +534,13 @@ function simulateMatch(Ht, At, r){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
     const s=wpick(r,[0,1,2],i=>secW[i]*secW[i]);
     const att=X.rat[4+s], def=Y.rat[mirror[s]];
-    const Rr=Math.pow(att,1.6)/(Math.pow(att,1.6)+Math.pow(def,1.6));
+    const Rr=0.5+(Math.pow(att,1.6)/(Math.pow(att,1.6)+Math.pow(def,1.6))-0.5)*RD_;
     const pShot=Math.min(0.75, 0.5*Math.pow(Rr,1.2));
     if(r()>=pShot) return;
     shots[side==='h'?0:1]++;
     const sh=pickShooter(r,X);
-    const shv=sh.p.s[5]*fm(sh.p)*(sh.p.sp==='rask'?1.03:1);
-    const kv=(Y.gk?Y.gk.s[0]*fm(Y.gk):2);
-    const q=shv*shv/(shv*shv+kv*kv+0.01);
-    let pg=0.12+0.38*q;
+    /* måltsjansen avgjøres av sektorduellen: lagets angrepsrating mot motstanderens forsvarsrating (keeperen er en del av forsvarsratingen) */
+    let pg=clamp(PG0+PGK*(Rr-0.5),0.05,0.70);
     if(s!==1){ pg*=0.92; if(sh.p.sp==='hode') pg+=0.06; }
     const asst = r()<0.72 ? pickAssist(r,X,sh.p) : null;
     const S=sh.p.n, K=kpName(Y);
