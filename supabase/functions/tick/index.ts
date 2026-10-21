@@ -75,7 +75,18 @@ const _oc = {};
 function orderedContribs(st, ord){
   const key = st+'|'+ord; if(_oc[key]) return _oc[key];
   let list = CT[st].map(c=>c.slice());
-  if(ord==='def') list.forEach(c=>{ if(isD(c[0])) c[2]*=1.30; else if(isA(c[0])) c[2]*=0.55; });
+  const winger = st==='WL'||st==='WR'||st==='AL'||st==='AR';
+  if(st==='FC' && ord==='def'){
+    /* defensiv spiss: faller dypere, mer midtbane og mindre angrep */
+    list.forEach(c=>{ if(isA(c[0])) c[2]*=0.75; else if(c[0]==='MD') c[2]*=1.8; });
+    list.push(['MD','ps',.10]);
+  }
+  else if(ord==='def') list.forEach(c=>{ if(isD(c[0])) c[2]*=1.30; else if(isA(c[0])) c[2]*=0.55; });
+  else if(ord==='off' && winger){
+    /* offensiv ving: mer sideangrep, litt mindre midtbane og forsvar */
+    const sideA = SLOT_SIDE[st]==='L' ? 'LA' : 'RA';
+    list.forEach(c=>{ if(c[0]===sideA) c[2]*=1.30; else if(isD(c[0])) c[2]*=0.55; else if(c[0]==='MD') c[2]*=0.85; });
+  }
   else if(ord==='off') list.forEach(c=>{ if(isA(c[0])) c[2]*=1.30; else if(isD(c[0])) c[2]*=0.55; });
   else if(ord==='left'||ord==='right'){
     const out=[];
@@ -91,6 +102,7 @@ function orderedContribs(st, ord){
     list.forEach(c=>{
       const onSide = (sd==='L' && (c[0]==='LD'||c[0]==='LA')) || (sd==='R' && (c[0]==='RD'||c[0]==='RA'));
       if(onSide){ out.push([c[0],c[1],c[2]*0.6]); out.push([isD(c[0])?'CD':'CA',c[1],c[2]*0.36]); }
+      else if(c[0]==='MD' && winger) out.push([c[0],c[1],c[2]*1.15]);
       else out.push(c);
     });
     list = out;
@@ -127,6 +139,21 @@ const SPEC_W = {
 function ageOffset(a){ const t={17:-4.5,18:-3.5,19:-2.6,20:-1.7,21:-1.0,22:-.4,23:0,24:.2,25:.3,26:.4,27:.4,28:.3,29:.1,30:-.2,31:-.6,32:-1.1,33:-1.8,34:-2.5}; return a in t ? t[a] : (a<17?-4.5:-3.2); }
 function randAge(r){ const x=r(); if(x<.15) return ri(r,17,19); if(x<.40) return ri(r,20,23); if(x<.80) return ri(r,24,29); return ri(r,30,34); }
 
+/* ---------- alder i år og dager: ett aldersår = 52 runder (to sesonger) ---------- */
+const AGE_ROUNDS = 52;
+let CUR_RN = 0;
+function setClock(rn){ CUR_RN = rn; }
+function rnOf(league){ return (league.s-1)*ROUNDS + league.r; }
+function ageAt(p, rn){ return p.bn==null ? p.a : Math.floor((rn-p.bn)/AGE_ROUNDS); }
+function ageParts(p, rn){ if(p.bn==null) return {y:p.a, d:null}; const x=rn-p.bn; return {y:Math.floor(x/AGE_ROUNDS), d:Math.floor(((x%AGE_ROUNDS)+AGE_ROUNDS)%AGE_ROUNDS*7/3)}; }
+function ensureAges(teams, rn){
+  const ch=new Set();
+  for(const t of teams) for(const p of t.players){
+    if(p.bn==null){ p.bn = rn - p.a*AGE_ROUNDS - (hashSeed(p.id)%AGE_ROUNDS); ch.add(t.i); }
+    const a=ageAt(p,rn); if(a!==p.a){ p.a=a; ch.add(t.i); }
+  }
+  return ch;
+}
 function genPlayer(r, role, ab, age, names){
   const n = ()=>normal(r)*1.1;
   const sk=[0,0,0,0,0,0,0];
@@ -148,7 +175,8 @@ function genPlayer(r, role, ab, age, names){
   const tm=clamp(Math.round(5+normal(r)*2.2),1,10), ld=clamp(Math.round(4.5+normal(r)*2+(age>=27?0.8:0)),1,10);
   const sy=r()<.65?pick(r,Object.keys(STYLE)):null;
   const xp=Math.max(0,age-17)*ri(r,0,10)+ri(r,0,15);
-  return {id:uid(r), n:name, a:age, s:sk, pr:[0,0,0,0,0,0,0], f:ri(r,4,6), sp, gl:0, tm, ld, sy, xp, yc:0, sus:0};
+  const bn=CUR_RN-age*AGE_ROUNDS-ri(r,0,AGE_ROUNDS-1);
+  return {id:uid(r), n:name, a:age, bn, s:sk, pr:[0,0,0,0,0,0,0], f:ri(r,4,6), sp, gl:0, tm, ld, sy, xp, yc:0, sus:0};
 }
 
 const ROLE_SC = {
@@ -199,7 +227,33 @@ function specMult(p, sec){
   if(p.sy==='kjemp' && (isD(sec)||sec==='MD')) m*=1.03;
   return m;
 }
-function slotsOf(lineup){ return FORMATIONS[lineup.f] || FORMATIONS['4-4-2']; }
+const DEF_T = ['DL','DC','DR'];
+function defIdx(types){ const a=[]; types.forEach((t,i)=>{ if(DEF_T.includes(t)) a.push(i); }); return a; }
+/* mulige roller for forsvarsspiller nr k av d, gitt rekkefølgen venstre til høyre */
+function defAllowed(k,d){ if(d<=1) return ['DC']; if(k===0) return ['DC','DL']; if(k===d-1) return ['DC','DR']; return ['DC']; }
+function validTy(base, ty){
+  if(!Array.isArray(ty) || ty.length!==11) return false;
+  const di=defIdx(base); let dc=0;
+  for(let i=0;i<11;i++){
+    const k=di.indexOf(i);
+    if(k<0){ if(ty[i]!==base[i]) return false; }
+    else { if(!defAllowed(k,di.length).includes(ty[i])) return false; if(ty[i]==='DC') dc++; }
+  }
+  return dc<=3;
+}
+function slotsOf(lineup){ const b=FORMATIONS[lineup.f] || FORMATIONS['4-4-2']; return (lineup.ty && validTy(b,lineup.ty)) ? lineup.ty : b; }
+function layoutOf(lineup){
+  const b=FORMATIONS[lineup.f] || FORMATIONS['4-4-2']; const lay=(LAYOUT[lineup.f]||LAYOUT['4-4-2']).map(x=>x.slice());
+  const ty=slotsOf(lineup); const di=defIdx(b); if(ty===b) return lay;
+  const hasL=ty[di[0]]==='DL', hasR=ty[di[di.length-1]]==='DR';
+  const cs=di.filter(i=>ty[i]==='DC'); const left=hasL?30:14, right=hasR?70:86;
+  di.forEach((i,k)=>{
+    if(ty[i]==='DL'){ lay[i]=[10,68]; }
+    else if(ty[i]==='DR'){ lay[i]=[90,68]; }
+    else { const j=cs.indexOf(i); const x=cs.length===1?50:left+(right-left)*j/(cs.length-1); lay[i]=[Math.round(x),74]; }
+  });
+  return lay;
+}
 function mapById(players){ const m={}; players.forEach(p=>{ m[p.id]=p; }); return m; }
 
 function calcRatings(players, lineup, byId){
@@ -239,6 +293,7 @@ function ensureLineup(team){
   if(!lu || !FORMATIONS[lu.f] || !Array.isArray(lu.sl) || lu.sl.length!==11){ team.lineup=autoLineup(team); return true; }
   let changed=false; const seen=new Set();
   lu.sl = lu.sl.map(id=>{ if(id && ids.has(id) && !seen.has(id)){ seen.add(id); return id; } changed=true; return null; });
+  if(lu.ty && !validTy(FORMATIONS[lu.f],lu.ty)){ lu.ty=null; changed=true; }
   if(!lu.o || lu.o.length!==11){ lu.o=new Array(11).fill('normal'); changed=true; }
   const slots=slotsOf(lu);
   lu.o = lu.o.map((o,i)=> ordersFor(slots[i]).includes(o)?o:'normal');
@@ -273,7 +328,8 @@ function cost(level){ return 0.55*Math.pow(1.16, level); }
 function ageTrainF(a){ return a<=17?2.2: a===18?2.05: a===19?1.85: a===20?1.65: a===21?1.45: a===22?1.28: a===23?1.12: a<=26?1: a===27?.96: a===28?.92: a===29?.88: a===30?.82: a<=32?.70: .55; }
 function lineupRoles(team){ const m={}; const slots=slotsOf(team.lineup); team.lineup.sl.forEach((id,i)=>{ if(id) m[id]=SLOT_ROLE[slots[i]]; }); return m; }
 function trainShare(team){ const tr=team.training||{}; const ks=[tr.a,tr.b].filter(Boolean); return {ks, share: ks.length===2?0.6:1}; }
-function trainingRate(p, k, role, inLine, share){ return REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
+const TRAIN_SCALE = 0.3;
+function trainingRate(p, k, role, inLine, share){ return TRAIN_SCALE*REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
 function trainTeam(team, r, week){
   const {ks,share}=trainShare(team); if(!ks.length) return;
   ensureLineup(team);
@@ -295,7 +351,7 @@ const DECLINE_W = {kp:.5, df:1, mf:.8, ps:.6, wg:1.3, sc:1, sp:.35};
 function agingDecline(team, r, week){
   for(const p of team.players){
     if(p.a<30) continue;
-    const base=Math.min(0.09, 0.012*(p.a-29));
+    const base=Math.min(0.045, 0.006*(p.a-29));
     SK.forEach((k,i)=>{
       if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); }
     });
@@ -626,6 +682,14 @@ function simulateMatch(Ht, At, r){
   return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
+/* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
+function simulateFriendly(Ht, At, luH, luA, id){
+  const mk=(T,lu)=>({...T, players:T.players.map(p=>({...p, sus:0})), lineup: lu?JSON.parse(JSON.stringify(lu)):JSON.parse(JSON.stringify(T.lineup||null))});
+  const H=mk(Ht,luH), A=mk(At,luA);
+  const res=simulateMatch(H,A,rngFrom('fr-'+id));
+  return Object.assign({h:Ht.i,a:At.i},res);
+}
+
 /* ---------- terminliste ---------- */
 function makeFixtures(season){
   const r=rngFrom('fx-'+season); let arr=[]; for(let i=0;i<N_TEAMS;i++) arr.push(i);
@@ -663,6 +727,7 @@ function tableOrder(tb){
     .sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.t-b.t);
 }
 function createLeague(now){
+  setClock(0);
   const r=rngFrom('liga-'+now); const names=new Set();
   const teams=[]; for(let i=0;i<N_TEAMS;i++){ const T=clamp(8.6+normal(r)*0.7,7.0,10.2); teams.push(newTeam(i,r,names,T)); }
   { const t0=teams[0]; const jd=t0.players.filter(p=>bestRole(p)==='IM').sort((a,b)=>ability(b)-ability(a))[1] || t0.players[5];
@@ -724,13 +789,14 @@ function seasonRollover(league, teams, r, names){
   const notes=[];
   for(const t of teams){
     const retired=[];
-    t.players.forEach(p=>{ p.a++; p.gl=0; });
+    t.players.forEach(p=>{ p.gl=0; });
     t.players=t.players.filter(p=>{
-      if(p.a>=38 || (p.a>=35 && r()<(p.a-34)*0.3)){ retired.push(p); return false; }
+      if(p.a>=38 || (p.a>=35 && r()<(p.a-34)*0.15)){ retired.push(p); return false; }
       return true;
     });
-    for(let k=0;k<2;k++) t.players.push(genYouth(r,names));
+    t.players.push(genYouth(r,names));
     while(t.players.length<SQUAD_MIN+1) t.players.push(genYouth(r,names));
+    if(!t.owner){ ensureLineup(t); const inXI=new Set(t.lineup.sl); while(t.players.length>23){ const c=t.players.filter(p=>!inXI.has(p.id)).sort((a,b)=>value(a)-value(b))[0]; if(!c) break; t.players=t.players.filter(p=>p!==c); } }
     ensureLineup(t);
     if(t.owner && retired.length) notes.push({t:t.i, text:`${retired.map(p=>p.n).join(', ')} la opp etter sesongen.`});
     t.st={};
@@ -742,9 +808,11 @@ function seasonRollover(league, teams, r, names){
 /* ---------- en kampdag i to faser: avspark og slutt ---------- */
 function simulateRound(league, teams, market, names){
   const g=league.g;
+  const rn0=rnOf(league); setClock(rn0);
   const r0=rngFrom('slot-'+g+'-'+league.s);
   const week=Math.floor(g/3);
   const out={doc:null, changed:new Set(), marketChanged:false};
+  ensureAges(teams, rn0).forEach(i=>out.changed.add(i));
   if(g%3===0){
     for(const t of teams){
       if(!t.owner) aiPlan(t,r0,week);
@@ -792,6 +860,7 @@ function finishRound(league, teams, doc, names){
   }
   doc.live=false;
   league.g++; league.r++; league.ph=0;
+  setClock(rnOf(league)); ensureAges(teams, rnOf(league)).forEach(i=>out.changed.add(i));
   if(league.r>=ROUNDS){
     out.notes=seasonRollover(league,teams,r0,names);
     teams.forEach(t=>out.changed.add(t.i));
@@ -817,6 +886,7 @@ return {
   simulateMatch, makeFixtures, slotTime, firstSlotAfter, mondayOf, osloParts, emptyTable, tableOrder,
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
+  slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
   STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
@@ -871,7 +941,67 @@ function makeStore({db, uid, now}){
     if(!L.ph) return t >= E.slotTime(L.anchor, L.g);
     return doc ? t >= doc.end : false;
   }
+  /* ----- treningskamper ----- */
+  const frRef = id => db.doc('friendlies/'+id);
+  const FR_ACTIVE = ['open','ready','live'];
+  async function readFriendlies(){ const s=await db.collection('friendlies').get(); return s.docs.map(d=>d.data()).filter(Boolean); }
+  async function challenge(fromI, toI){
+    return withLease("friendly", 2500, async ()=>{
+      const from=(await teamRef(fromI).get()).data(); const to=(await teamRef(toI).get()).data();
+      if(!from || from.owner!==uid) fail('Du styrer ikke dette laget.');
+      if(!to || toI===fromI) fail('Ugyldig motstander.');
+      const all=await readFriendlies();
+      if(all.some(f=>FR_ACTIVE.includes(f.st) && (f.h===fromI||f.a===fromI))) fail('Laget ditt har allerede en treningskamp på gang.');
+      if(all.some(f=>FR_ACTIVE.includes(f.st) && (f.h===toI||f.a===toI))) fail('Motstanderen har allerede en treningskamp på gang.');
+      const id='f'+now().toString(36)+Math.random().toString(36).slice(2,5);
+      await retry(()=>frRef(id).set({id, st:'open', h:fromI, a:toI, ai:!to.owner, lu:{h:null,a:null}, ok:{h:false,a:false}, t0:now(), startAt:null}));
+      return id;
+    });
+  }
+  async function approveFriendly(id, ti){
+    const res=await withLease("friendly", 2500, async ()=>{
+      const snap=await frRef(id).get(); const f=snap.exists?snap.data():null;
+      if(!f || f.st!=='open') fail('Treningskampen er ikke lenger åpen.');
+      const side = f.h===ti ? 'h' : f.a===ti ? 'a' : null; if(!side) fail('Du er ikke med i denne kampen.');
+      const team=(await teamRef(ti).get()).data(); if(!team || team.owner!==uid) fail('Du styrer ikke dette laget.');
+      const c=clone(team); E.ensureLineup(c);
+      f.lu[side]=clone(c.lineup); f.ok[side]=true;
+      if(f.ai) f.ok.a=true;
+      if(f.ok.h && f.ok.a){ f.st='ready'; f.startAt = f.ai ? now()+2*60000 : now(); }
+      await retry(()=>frRef(id).set(f));
+      return f;
+    });
+    try{ await tickFriendlies(); }catch(e){}
+    return res;
+  }
+  async function cancelFriendly(id){
+    const snap=await frRef(id).get(); const f=snap.exists?snap.data():null; if(!f) return;
+    if(!['open','ready'].includes(f.st)) fail('Kampen kan ikke lenger avbrytes.');
+    const [h,a]=await Promise.all([teamRef(f.h).get(), teamRef(f.a).get()]);
+    if(h.data().owner!==uid && a.data().owner!==uid) fail('Du er ikke med i denne kampen.');
+    await retry(()=>frRef(id).update({st:'cancelled'}));
+  }
+  async function tickFriendlies(){
+    let n=0; const list=await readFriendlies(); const t=now();
+    for(const f of list){
+      if(f.st==='open' && t-f.t0>6*3600000){ await retry(()=>frRef(f.id).update({st:'expired'})); continue; }
+      if(['done','cancelled','expired'].includes(f.st) && t-(f.end||f.t0)>48*3600000){ await retry(()=>frRef(f.id).delete()); continue; }
+      if(f.st==='ready' && t>=f.startAt){
+        const lease=await db.doc('locks/friendly-sim').acquire({holder:hid, ttlMs:10000}); if(!lease.acquired) continue;
+        const fresh=(await frRef(f.id).get()).data(); if(!fresh || fresh.st!=='ready') continue;
+        const [h,a]=await Promise.all([teamRef(fresh.h).get(), teamRef(fresh.a).get()]);
+        const L=(await refs.league.get()).data(); if(L) E.setClock(E.rnOf(L));
+        const m=E.simulateFriendly(h.data(), a.data(), fresh.lu.h, fresh.ai?null:fresh.lu.a, fresh.id);
+        await retry(()=>frRef(fresh.id).set({...fresh, st:'live', live:true, t:fresh.startAt, end:fresh.startAt+(m.L1+15+m.L2)*60000, m})); n++;
+      } else if(f.st==='live' && t>=f.end){
+        await retry(()=>frRef(f.id).update({st:'done', live:false})); n++;
+      }
+    }
+    return n;
+  }
+
   async function tick(){
+    try{ await tickFriendlies(); }catch(e){}
     const first = await refs.league.get();
     if(!first.exists) return {ran:0};
     const L0 = first.data();
@@ -1019,7 +1149,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
 }
 
 /* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */
