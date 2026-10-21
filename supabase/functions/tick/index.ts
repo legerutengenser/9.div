@@ -51,7 +51,7 @@ const LAYOUT = {
 
 /* Hva hver posisjon bidrar med til de sju sektorene: [sektor, egenskap, vekt] */
 const CT = {
-  GK:[['LD','kp',.30],['CD','kp',.95],['RD','kp',.30]],
+  GK:[['LD','kp',.45],['CD','kp',1.4],['RD','kp',.45]],
   DC:[['CD','df',1],['LD','df',.22],['RD','df',.22],['MD','mf',.10]],
   DL:[['LD','df',1],['CD','df',.35],['MD','mf',.10],['LA','wg',.25],['LA','ps',.05]],
   DR:[['RD','df',1],['CD','df',.35],['MD','mf',.10],['RA','wg',.25],['RA','ps',.05]],
@@ -159,7 +159,7 @@ function genPlayer(r, role, ab, age, names){
   const sk=[0,0,0,0,0,0,0];
   const set=(i,v)=>{ sk[i]=clamp(Math.round(v+n()),0,20); };
   switch(role){
-    case 'GK': set(0,ab+.8); sk[1]=ri(r,1,5); sk[2]=ri(r,0,3); sk[3]=ri(r,0,4); sk[5]=ri(r,0,2); set(6,ab*.35); break;
+    case 'GK': set(0,ab+.8); sk[1]=ri(r,1,5); sk[2]=ri(r,0,3); sk[3]=ri(r,0,4); sk[5]=ri(r,0,2); set(6,ab*.5); break;
     case 'CB': set(1,ab+.5); set(2,ab*.45); set(3,ab*.35); sk[4]=ri(r,0,3); sk[5]=ri(r,0,3); sk[0]=ri(r,0,1); set(6,ab*.45); break;
     case 'WB': set(1,ab); set(4,ab*.6); set(2,ab*.45); set(3,ab*.5); sk[5]=ri(r,0,4); set(6,ab*.35); break;
     case 'IM': set(2,ab+.3); set(3,ab*.85); set(1,ab*.55); sk[4]=ri(r,1,5); set(5,ab*.45); set(6,ab*.5); break;
@@ -434,6 +434,7 @@ function effLineup(team){
 /* ---------- kampsimulering i tidsvinduer (5 min) med bytter, kort og kaptein ---------- */
 const SHOOT_W = {FC:1, AL:.5, AR:.5, WL:.35, WR:.35, MC:.22, DL:.04, DR:.04, DC:.04, GK:0};
 const ASSIST_W = {MC:1, WL:.9, WR:.9, AL:.9, AR:.9, FC:.5, DL:.35, DR:.35, DC:.15, GK:0};
+const PEN_W = {GK:.5, DC:1.3, DL:1, DR:1, MC:.7, WL:.3, WR:.3, AL:.2, AR:.2, FC:.2};
 const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, FC:.6};
 const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
 const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
@@ -479,7 +480,7 @@ function pickShooter(r, T, not){ return wpick(r, T.xi.filter(x=>x.p!==not), shoo
 function pickAssist(r, T, not){ return wpick(r, T.xi.filter(x=>x.p!==not), x=>ASSIST_W[x.st]*(x.p.s[3]+1)*(x.p.sy==='lag'?1.35:x.p.sy==='ind'?.85:1)); }
 
 /* ---------- kommentar ---------- */
-const GOAL_KINDS = {g:1, s:1, u:1, b:1};
+const GOAL_KINDS = {g:1, s:1, u:1, b:1, p:1};
 const P = (r,arr)=>arr[Math.floor(r()*arr.length)];
 function buildUp(r, sec, S, A){
   const side = sec===0?'venstre':sec===2?'høyre':'midten';
@@ -548,9 +549,12 @@ function simulateMatch(Ht, At, r){
     if(r()<pg) push(x+r()*5,{k:'g', s:side, p:S, i:sh.p.id, a:asst?asst.p.n:null, tx:base+' '+goalLine(r,S,K)});
     else { const o=r(); const kind=o<.55?'sv':o<.77?'ms':o<.9?'bl':'po'; push(x+r()*5,{k:kind, s:side, p:S, tx:base+' '+missLine(r,kind,K,S)}); }
   }
+  /* keeper på dødball og straffe: dødball teller mest, keeperskill en del */
+  const gkQ=Y=>Y.gk?(0.6*Y.gk.s[6]+0.4*Y.gk.s[0])*fm(Y.gk):0;
   function setPiece(X, Y, side, x, free){
     const sp=X.tk?X.tk.s[6]*fm(X.tk):0;
-    const p=clamp(0.85*(0.025+0.11*(sp/20)+0.014*X.hodeAtk-0.008*Y.hodeDef), 0.01, 0.3);
+    const kf=clamp(1.2-0.035*gkQ(Y),0.5,1.3);
+    const p=clamp(0.85*kf*(0.025+0.11*(sp/20)+0.014*X.hodeAtk-0.008*Y.hodeDef), 0.01, 0.3);
     shots[side==='h'?0:1]++;
     const T=X.tk?X.tk.n:'en spiller'; const corner=!free;
     const intro=corner?`Hjørnespark til ${X.team.name}. ${T} slår ballen inn i feltet.`:`Frispark til ${X.team.name} i god posisjon. ${T} står klar over ballen.`;
@@ -559,7 +563,19 @@ function simulateMatch(Ht, At, r){
       const S=w.p.n; const hd=w.p.sp==='hode'||r()<.5;
       const fin = (!corner && w.p===X.tk) ? `${S} sparker ballen rett i mål! ${kpName(Y)} står helt stille.` : hd ? `${S} hever seg høyest og nikker ballen i mål!` : `${S} får ballen og dundrer den i mål!`;
       push(x+r()*5,{k:'s', s:side, p:S, i:w.p.id, a:X.tk?X.tk.n:null, tx:intro+' '+fin+' Så deilig!'});
-    } else push(x+r()*5,{k:'sn', s:side, tx:intro+' '+P(r,['Forsvaret klarerer til slutt.',`${kpName(Y)} plukker ballen ned.`,'Ballen går rett over mål.','Ingenting kommer ut av det.'])});
+    } else push(x+r()*5,{k:'sn', s:side, tx:intro+' '+P(r,['Forsvaret klarerer til slutt.',`${kpName(Y)} redder dødballen.`,'Ballen går rett over mål.','Ingenting kommer ut av det.'])});
+  }
+  function penalty(X, Y, side, x){
+    const T=X.tk||bestTakerP(X.xi).p||X.xi[0].p; const tp=T.s[6]*fm(T), ts=T.s[5]*fm(T);
+    const tq=0.75*tp+0.25*ts, kq=gkQ(Y); const K=kpName(Y);
+    shots[side==='h'?0:1]++;
+    const pg=clamp(0.70+0.022*(tq-kq),0.45,0.90);
+    const intro=`${T.n} stiller opp foran ballen på straffemerket. ${K} står klar på streken.`;
+    if(r()<pg) push(x,{k:'p', s:side, p:T.n, i:T.id, a:null, tx:intro+' '+P(r,[`${T.n} skyter sikkert i hjørnet. Mål!`,`${T.n} setter ballen midt i mål, og ${K} kaster seg feil vei!`,`${T.n} sender ballen i krysset! ${K} har ingen sjanse!`])+' Så kald fra elleve meter!'});
+    else {
+      const saved=r()<clamp(0.5+0.01*(kq-tq),0.35,0.7);
+      push(x,{k:saved?'ps':'pm', s:side, p:T.n, tx:intro+' '+(saved?P(r,[`${K} leser ${T.n} og redder straffen!`,`${K} kaster seg riktig og tar straffen!`]):P(r,[`${T.n} setter ballen i stolpen!`,`${T.n} skyter høyt over mål!`,`${T.n} drar den utenfor!`]))});
+    }
   }
   function sendOff(side, X, p, x){
     const i=side.sl.indexOf(p.id); if(i<0) return;
@@ -589,6 +605,10 @@ function simulateMatch(Ht, At, r){
       else { yel=true; Xs.yel[p.id]=1; push(xx+0.05,{k:'yc', s:sideCode, p:p.n, i:p.id, tx:`Gult kort til ${p.n}.`}); cards.push({i:p.id,s:sideCode,k:'y'}); }
     }
     if(red) sendOff(Xs,X,p,x);
+    if(r()<0.04*PEN_W[w.st]){
+      push(xx+0.08,{k:'fl', s:sideCode, p:p.n, tx:`${p.n} bryter ned ${victim.n} inne i sekstenmeteren! Dommeren peker på straffemerket!`});
+      return 'pen';
+    }
     if(!red && r()<0.35) return 'fk';
     return red?'red':null;
   }
@@ -648,7 +668,7 @@ function simulateMatch(Ht, At, r){
     for(let k=0;k<2;k++){ const s=sides[k]; if(diff[k]<0 && !s.capTalk){ const ci=capInfo(s); if(ci.p && ci.q>=0.4){ s.capTalk=true; push(x0+0.05,{k:'c', s:SK_[k], p:ci.p.n, tx:`${ci.p.n} samler laget og roper at nå må ${s.team.name} sette fart! Kapteinen drar laget fremover.`}); } } }
     const mh=rat[0][3], ma=rat[1][3];
     let shareH = Math.pow(mh,1.6)/(Math.pow(mh,1.6)+Math.pow(ma,1.6)); shareH = 0.5+(shareH-0.5)*0.9; shareSum+=shareH*w;
-    const nH=sr(44*shareH*(1+0.03*C[0].quick)*frac), nA=sr(44*(1-shareH)*(1+0.03*C[1].quick)*frac);
+    const nH=sr(41*shareH*(1+0.03*C[0].quick)*frac), nA=sr(41*(1-shareH)*(1+0.03*C[1].quick)*frac);
     for(let k=0;k<nH;k++) attackOnce(C[0],C[1],'h',x0);
     for(let k=0;k<nA;k++) attackOnce(C[1],C[0],'a',x0);
     // hjørnespark og frispark fra spill
@@ -656,7 +676,7 @@ function simulateMatch(Ht, At, r){
     // frispark og kort
     for(let k=0;k<2;k++){
       const n=sr(3.6*frac);
-      for(let j=0;j<n;j++){ const res=foul(C[k],C[1-k],SK_[k],x0,sides[k],sides[1-k]); if(res==='fk') setPiece(C[1-k],C[k],SK_[1-k],x0+0.1,true); }
+      for(let j=0;j<n;j++){ const res=foul(C[k],C[1-k],SK_[k],x0,sides[k],sides[1-k]); if(res==='fk') setPiece(C[1-k],C[k],SK_[1-k],x0+0.1,true); else if(res==='pen') penalty(C[1-k],C[k],SK_[1-k],x0+0.5+r()*0.3); }
     }
     wild(C[0],C[1],'h',x0,frac); wild(C[1],C[0],'a',x0,frac);
     const nf=sr(8*frac); for(let j=0;j<nf;j++){ const h=r()<.5; const X=h?C[0]:C[1], Y=h?C[1]:C[0]; if(X.xi.length>2&&Y.xi.length>2) push(x0+r()*w,{k:'f', s:h?'h':'a', tx:fillerText(r,X,Y)}); }
