@@ -436,6 +436,8 @@ const SHOOT_W = {FC:1, AL:.5, AR:.5, WL:.35, WR:.35, MC:.22, DL:.04, DR:.04, DC:
 const ASSIST_W = {MC:1, WL:.9, WR:.9, AL:.9, AR:.9, FC:.5, DL:.35, DR:.35, DC:.15, GK:0};
 const PEN_W = {GK:.5, DC:1.3, DL:1, DR:1, MC:.7, WL:.3, WR:.3, AL:.2, AR:.2, FC:.2};
 const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, FC:.6};
+/* typisk bidrag per rolle; kamprating 5 = typisk for rollen */
+const RATE_REF = {GK:6.7, DL:5.5, DR:5.5, DC:3.2, MC:5.0, WL:6.2, WR:6.2, AL:6.6, AR:6.6, FC:4.8};
 const PG0 = 0.31, PGK = 1.0, RD_ = 0.5;
 const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
 const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
@@ -529,6 +531,11 @@ function simulateMatch(Ht, At, r){
   const wins=[]; for(let x=0;x<L1;x+=5) wins.push([x,Math.min(L1,x+5)]); for(let x=L1;x<Ttot;x+=5) wins.push([x,Math.min(Ttot,x+5)]);
   const kpName=Y=>Y.gk?Y.gk.n:'keeperen';
   let shots=[0,0], shareSum=0, firstRat=null;
+  const xg=[0,0]; const addx=(side,v)=>{ xg[side==='h'?0:1]+=v; };
+  const rs=[]; const pacc={};
+  /* spillerens bidrag til lagets ratinger (ferdighet x koeffisient x form x spesialitet, normalisert som lagratingene) */
+  const contribOf=(p,st,o)=>{ const f=formMult(p); let v=0; for(const c of orderedContribs(st,o||'normal')) v+=p.s[c[1]]*c[2]*f*specMult(p,c[3])/NORM[c[0]]; return v; };
+  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0]}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
 
   function attackOnce(X, Y, side, x, R){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
@@ -542,6 +549,7 @@ function simulateMatch(Ht, At, r){
     /* måltsjansen avgjøres av sektorduellen: lagets angrepsrating mot motstanderens forsvarsrating (keeperen er en del av forsvarsratingen) */
     let pg=clamp(PG0+PGK*(Rr-0.5),0.05,0.70);
     if(s!==1){ pg*=0.92; if(sh.p.sp==='hode') pg+=0.06; }
+    addx(side,pg);
     const asst = r()<0.72 ? pickAssist(r,X,sh.p) : null;
     const S=sh.p.n, K=kpName(Y);
     const base=buildUp(r,s,S,asst?asst.p.n:null)+' '+shotLine(r,S);
@@ -554,7 +562,7 @@ function simulateMatch(Ht, At, r){
     const sp=X.tk?X.tk.s[6]*fm(X.tk):0;
     const kf=clamp(1.2-0.035*gkQ(Y),0.5,1.3);
     const p=clamp(0.85*kf*(0.025+0.11*(sp/20)+0.014*X.hodeAtk-0.008*Y.hodeDef), 0.01, 0.3);
-    shots[side==='h'?0:1]++;
+    shots[side==='h'?0:1]++; addx(side,p);
     const T=X.tk?X.tk.n:'en spiller'; const corner=!free;
     const intro=corner?`Hjørnespark til ${X.team.name}. ${T} slår ballen inn i feltet.`:`Frispark til ${X.team.name} i god posisjon. ${T} står klar over ballen.`;
     if(r()<p){
@@ -568,7 +576,7 @@ function simulateMatch(Ht, At, r){
     const T=X.tk||bestTakerP(X.xi).p||X.xi[0].p; const tp=T.s[6]*fm(T), ts=T.s[5]*fm(T);
     const tq=0.75*tp+0.25*ts, kq=gkQ(Y); const K=kpName(Y);
     shots[side==='h'?0:1]++;
-    const pg=clamp(0.70+0.022*(tq-kq),0.45,0.90);
+    const pg=clamp(0.70+0.022*(tq-kq),0.45,0.90); addx(side,pg);
     const intro=`${T.n} stiller opp foran ballen på straffemerket. ${K} står klar på streken.`;
     if(r()<pg) push(x,{k:'p', s:side, p:T.n, i:T.id, a:null, tx:intro+' '+P(r,[`${T.n} skyter sikkert i hjørnet. Mål!`,`${T.n} setter ballen midt i mål, og ${K} kaster seg feil vei!`,`${T.n} sender ballen i krysset! ${K} har ingen sjanse!`])+' Så kald fra elleve meter!'});
     else {
@@ -622,15 +630,18 @@ function simulateMatch(Ht, At, r){
         if(r()<0.8){
           const shv=rc.p.s[5]*fm(rc.p); const kv=(Y.gk?Y.gk.s[0]*fm(Y.gk):2); const q=shv*shv/(shv*shv+kv*kv+0.01);
           const intro=`${u.p.n} ser en glipp i forsvaret og slår en genial gjennombruddspassning! ${rc.p.n} er helt alene med ${K}.`;
-          if(r()<clamp(0.30+0.45*q,0.3,0.8)) push(x+r()*5,{k:'u', s:side, p:rc.p.n, i:rc.p.id, a:u.p.n, tx:intro+' Han holder roen og setter ballen i mål! For en pasning!'});
+          const pu=clamp(0.30+0.45*q,0.3,0.8); addx(side,pu);
+          if(r()<pu) push(x+r()*5,{k:'u', s:side, p:rc.p.n, i:rc.p.id, a:u.p.n, tx:intro+' Han holder roen og setter ballen i mål! For en pasning!'});
           else push(x+r()*5,{k:'un', s:side, p:rc.p.n, tx:intro+' '+P(r,[`${K} redder fantastisk!`,`Men ${K} kommer ut og stenger vinkelen.`,`Skuddet går like utenfor!`])});
         } else {
           const intro=`${u.p.n} gjør noe helt uventet! Han dribler to mann og slår en finte.`;
+          addx(side,0.6);
           if(r()<0.6) push(x+r()*5,{k:'u', s:side, p:u.p.n, i:u.p.id, a:null, tx:intro+' Så dundrer han ballen i mål!'});
           else push(x+r()*5,{k:'un', s:side, p:u.p.n, tx:intro+' '+P(r,['Men skuddet går like utenfor.',`Men ${K} gjør en flott redning.`])});
         }
       } else {
         const sh=pickShooter(r,Y); if(!sh) continue;
+        addx(oside,0.45);
         if(r()<0.45) push(x+r()*5,{k:'b', s:oside, p:sh.p.n, i:sh.p.id, a:null, tx:`${u.p.n} slurver med ballen rett foran eget mål! ${sh.p.n} er framme og sender den i mål!`});
         else push(x+r()*5,{k:'un', s:side, p:u.p.n, tx:`${u.p.n} mister ballen i en farlig sone, men ${Y.team.name} klarer ikke å utnytte det.`});
       }
@@ -662,6 +673,8 @@ function simulateMatch(Ht, At, r){
     doSubs(sides[0],x0,diff[0],'h'); doSubs(sides[1],x0,diff[1],'a');
     const rat=[sideRat(sides[0],Math.max(0,-diff[0])), sideRat(sides[1],Math.max(0,-diff[1]))];
     if(!firstRat) firstRat=rat.map(a=>a.slice());
+    rs.push([Math.round(toReal(x0)*10)/10, rat[0].map(v=>Math.round(v*10)/10), rat[1].map(v=>Math.round(v*10)/10)]);
+    trackPlayers(sides[0],w); trackPlayers(sides[1],w);
     const C=[mkCtx(sides[0],rat[0]), mkCtx(sides[1],rat[1])];
     // kapteinen samler laget
     for(let k=0;k<2;k++){ const s=sides[k]; if(diff[k]<0 && !s.capTalk){ const ci=capInfo(s); if(ci.p && ci.q>=0.4){ s.capTalk=true; push(x0+0.05,{k:'c', s:SK_[k], p:ci.p.n, tx:`${ci.p.n} samler laget og roper at nå må ${s.team.name} sette fart! Kapteinen drar laget fremover.`}); } } }
@@ -698,7 +711,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a']])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
@@ -1095,6 +1108,16 @@ function makeStore({db, uid, now}){
     if(await lineupLocked()) fail('Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.');
     await retry(()=>teamRef(i).update({lineup}));
   }
+  async function setNumbers(ti, map){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data();
+      if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      for(const p of t.players){ if(Object.prototype.hasOwnProperty.call(map,p.id)){ const v=map[p.id]; if(v==null||v==='') delete p.no; else p.no=v; } }
+      const seen=new Set();
+      for(const p of t.players){ if(p.no==null) continue; if(!Number.isInteger(p.no)||p.no<1||p.no>99) fail('Draktnummer må være et tall fra 1 til 99.'); if(seen.has(p.no)) fail('Nummer '+p.no+' er allerede i bruk på laget.'); seen.add(p.no); }
+      await retry(()=>teamRef(ti).update({players:t.players}));
+    });
+  }
   async function saveTraining(i, training){ await retry(()=>teamRef(i).update({training})); }
   async function renameTeam(i, name){
     const teams=await readAllTeams(); name=cleanName(name,teams,i);
@@ -1157,7 +1180,7 @@ function makeStore({db, uid, now}){
         if(!p){ m.items=m.items.filter(x=>x.id!==itemId); await refs.market.set(m); fail('Spilleren er ikke lenger på laget.'); }
         seller.players=seller.players.filter(x=>x.id!==itemId); seller.money+=it.price;
       } else p=clone(it.pl);
-      delete p.lst; p.gl=0;
+      delete p.lst; delete p.no; p.gl=0;
       b.players.push(p); b.money-=it.price;
       m.items=m.items.filter(x=>x.id!==itemId);
       E.addLog(m, `${b.name} kjøpte ${p.n} (${p.a} år) for ${E.fmtKr(it.price)}${seller?` fra ${seller.name}`:''}`, m.w);
@@ -1168,7 +1191,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
 }
 
 /* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */
