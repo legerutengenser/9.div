@@ -531,11 +531,12 @@ function simulateMatch(Ht, At, r){
   const wins=[]; for(let x=0;x<L1;x+=5) wins.push([x,Math.min(L1,x+5)]); for(let x=L1;x<Ttot;x+=5) wins.push([x,Math.min(Ttot,x+5)]);
   const kpName=Y=>Y.gk?Y.gk.n:'keeperen';
   let shots=[0,0], shareSum=0, firstRat=null;
+  const startTy=sides.map(sd=>sd.types.slice());
   const xg=[0,0]; const addx=(side,v)=>{ xg[side==='h'?0:1]+=v; };
   const rs=[]; const pacc={};
   /* spillerens bidrag til lagets ratinger (ferdighet x koeffisient x form x spesialitet, normalisert som lagratingene) */
   const contribOf=(p,st,o)=>{ const f=formMult(p); let v=0; for(const c of orderedContribs(st,o||'normal')) v+=p.s[c[1]]*c[2]*f*specMult(p,c[3])/NORM[c[0]]; return v; };
-  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0]}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
+  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0],i,s:rs.length<=1?1:0}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
 
   function attackOnce(X, Y, side, x, R){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
@@ -711,7 +712,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a']])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */

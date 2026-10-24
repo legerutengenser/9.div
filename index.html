@@ -280,6 +280,15 @@ body.loggedout .acct{display:none}
 .noin{width:56px;text-align:center;padding:4px}
 .prate{font-weight:700}.prate.hi{color:var(--good)}.prate.lo{color:var(--bad)}
 
+.slot.ro{cursor:default;width:27%}
+.slot .dot.rt{background:rgba(8,24,16,.85);color:#fff;font-size:15px}
+.slot .dot.rt.hi,.subchip b.rt.hi{background:var(--good);color:#fff}
+.slot .dot.rt.lo,.subchip b.rt.lo{background:var(--bad);color:#fff}
+.slot.ro .ord{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;gap:2px;align-items:center;min-height:11px}
+.subsrow{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:8px}
+.subchip{font-size:13px;display:inline-flex;gap:5px;align-items:center}
+.subchip b.rt{display:inline-block;min-width:30px;text-align:center;padding:1px 4px;border-radius:3px;background:var(--surface2);font-family:var(--f-display)}
+
 </style>
 </head>
 <body>
@@ -822,11 +831,12 @@ function simulateMatch(Ht, At, r){
   const wins=[]; for(let x=0;x<L1;x+=5) wins.push([x,Math.min(L1,x+5)]); for(let x=L1;x<Ttot;x+=5) wins.push([x,Math.min(Ttot,x+5)]);
   const kpName=Y=>Y.gk?Y.gk.n:'keeperen';
   let shots=[0,0], shareSum=0, firstRat=null;
+  const startTy=sides.map(sd=>sd.types.slice());
   const xg=[0,0]; const addx=(side,v)=>{ xg[side==='h'?0:1]+=v; };
   const rs=[]; const pacc={};
   /* spillerens bidrag til lagets ratinger (ferdighet x koeffisient x form x spesialitet, normalisert som lagratingene) */
   const contribOf=(p,st,o)=>{ const f=formMult(p); let v=0; for(const c of orderedContribs(st,o||'normal')) v+=p.s[c[1]]*c[2]*f*specMult(p,c[3])/NORM[c[0]]; return v; };
-  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0]}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
+  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0],i,s:rs.length<=1?1:0}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
 
   function attackOnce(X, Y, side, x, R){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
@@ -1002,7 +1012,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a']])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
@@ -1955,6 +1965,24 @@ function luckHtml(m,H,A){
   <p class="small" style="margin:10px 0 0">${verdict}</p>
   <p class="tiny muted" style="margin:4px 0 0">Forventede mål ut fra sjansenes kvalitet: ${esc(H.short)} ${m.xg[0].toFixed(1)}, ${esc(A.short)} ${m.xg[1].toFixed(1)}. Faktisk resultat ${m.hg}–${m.ag}.</p>`;
 }
+function lineupRatingsHtml(m,H,A){
+  if(!m.pr||!m.ty) return '';
+  const ent=Object.entries(m.pr);
+  const svg=`<svg viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true"><rect x="1" y="1" width="98" height="126"/><line x1="1" y1="64" x2="99" y2="64"/><circle cx="50" cy="64" r="10"/><rect x="24" y="1" width="52" height="19"/><rect x="38" y="1" width="24" height="7"/><rect x="24" y="108" width="52" height="19"/><rect x="38" y="120" width="24" height="7"/></svg>`;
+  const cls=r=>r>=7?' hi':r<4?' lo':'';
+  const extra=(id,mins,full)=>{ const g=m.ev.filter(e=>e.i===id&&E.GOAL_KINDS[e.k]).length, y=m.ev.some(e=>e.i===id&&e.k==='yc'), r=m.ev.some(e=>e.i===id&&e.k==='rc'); return (g?'⚽'.repeat(Math.min(g,3)):'')+(y?'<i class="kort y"></i>':'')+(r?'<i class="kort r"></i>':'')+(mins<full-1?` ${mins}'`:''); };
+  const pitch=(code,T,k)=>{
+    const lay=E.layoutOf({f:code==='h'?m.hf:m.af, ty:m.ty[k]});
+    const full=m.L1+m.L2;
+    const st=ent.filter(([id,v])=>v[4]===code&&v[6]===1);
+    const slots=st.map(([id,v])=>{ const r=v[0]/10; const p=lay[v[5]]; if(!p) return '';
+      return `<div class="slot ro" style="left:${p[0]}%;top:${p[1]}%"><span class="dot rt${cls(r)}">${r.toFixed(1)}</span><span class="nm">${esc(v[3].split(' ').slice(1).join(' ')||v[3])}</span><span class="ord">${extra(id,v[1],full)}</span></div>`; }).join('');
+    const subs=ent.filter(([id,v])=>v[4]===code&&v[6]!==1);
+    const sb=subs.length?`<div class="subsrow"><span class="muted small">Innbyttere:</span>${subs.map(([id,v])=>{ const r=v[0]/10; return `<span class="subchip"><b class="rt${cls(r)}">${r.toFixed(1)}</b> ${esc(v[3])} <span class="muted">${SLOT_CODE[v[2]]||''} ${v[1]}'</span>${extra(id,v[1],9999)}</span>`; }).join('')}</div>`:'';
+    return `<div><div class="caps" style="margin-bottom:6px">${esc(T.name)} <span class="muted" style="text-transform:none;letter-spacing:0">${code==='h'?m.hf:m.af}</span></div><div class="pitch">${svg}${slots}</div>${sb}</div>`;
+  };
+  return `<div class="caps" style="margin:18px 0 8px">Lagoppstilling med ratinger</div><div class="grid g2" style="gap:16px">${pitch('h',H,0)}${pitch('a',A,1)}</div>`;
+}
 function playerRatingsHtml(m,H,A){
   if(!m.pr) return '';
   const ent=Object.entries(m.pr); if(!ent.length) return '';
@@ -1982,7 +2010,7 @@ function matchPanel(doc,m){
   return `<div class="card" id="mp" style="margin-top:16px">${scoreHead(H,A,lv,40)}${replayCtl(doc,m,lv,key)}
   ${lv.st==='before'?'':duelsCard(m,H,A,lv,key)}
   ${lv.st==='done'?luckHtml(m,H,A):''}
-  <div class="caps" style="margin:18px 0 4px">${live?'Direkte fra banen':'Kommentarer'}</div><div class="feedkey tiny muted"><span class="h">◀ ${esc(H.short)}</span><span class="a">${esc(A.short)} ▶</span></div>${feed.length?feedHtml(feed,m):`<div class="empty">Avspark ${fmtTime(doc.t)}. Kommentarene dukker opp her mens kampen pågår.</div>`}${lv.st==='done'?playerRatingsHtml(m,H,A)+statsHtml(m,H,A):''}</div>`;
+  <div class="caps" style="margin:18px 0 4px">${live?'Direkte fra banen':'Kommentarer'}</div><div class="feedkey tiny muted"><span class="h">◀ ${esc(H.short)}</span><span class="a">${esc(A.short)} ▶</span></div>${feed.length?feedHtml(feed,m):`<div class="empty">Avspark ${fmtTime(doc.t)}. Kommentarene dukker opp her mens kampen pågår.</div>`}${lv.st==='done'?lineupRatingsHtml(m,H,A)+playerRatingsHtml(m,H,A)+statsHtml(m,H,A):''}</div>`;
 }
 
 const FR_ACTIVE=['open','ready','live'];
