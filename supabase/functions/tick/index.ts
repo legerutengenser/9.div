@@ -862,7 +862,10 @@ function simulateRound(league, teams, market, names){
     const Ht=teams[h], At=teams[a];
     if(!Ht.owner && (!Ht.lineup || g%3===0)) Ht.lineup=autoLineup(Ht);
     if(!At.owner && (!At.lineup || g%3===0)) At.lineup=autoLineup(At);
-    const res=simulateMatch(Ht,At,rngFrom(`m-${league.s}-${rd}-${h}-${a}`));
+    const key=league.s+'-'+rd;
+    const withLu=T=>(T.lus&&T.lus[key])?{...T, lineup:JSON.parse(JSON.stringify(T.lus[key]))}:T;
+    const res=simulateMatch(withLu(Ht),withLu(At),rngFrom(`m-${league.s}-${rd}-${h}-${a}`));
+    for(const T of [Ht,At]){ if(T.lus){ for(const k of Object.keys(T.lus)){ const [ks,kr]=k.split('-').map(Number); if(ks<league.s||(ks===league.s&&kr<=rd)) delete T.lus[k]; } } }
     doc.m.push(Object.assign({h,a},res));
     out.changed.add(h); out.changed.add(a);
   }
@@ -914,7 +917,7 @@ return {
   SK, SKI, SK_NAME, SK_SHORT, SEC, SEC_NAME, SPEC, SPEC_INFO, ROLE_NAME, ORDER_NAME, SLOT_NAME, SLOT_ROLE, SLOT_SIDE, ROLES,
   N_TEAMS, ROUNDS, SQUAD_MIN, SQUAD_MAX, FORMATIONS, LAYOUT, CT, REL, ROLE_SC, TEAM_DEFS, PRIZES, START_MONEY,
   ordersFor, orderedContribs, calcRatings, slotScore, autoLineup, ensureLineup, lineupQuality, teamStrength, assignFormation,
-  bestRole, ability, value, wage, cost, ageTrainF, trainingRate, lineupRoles, trainShare, formMult,
+  bestRole, ROLE_SC, ability, value, wage, cost, ageTrainF, trainingRate, lineupRoles, trainShare, formMult,
   genPlayer, genMarketPlayer, genYouth, genSquad, newTeam, mapById,
   simulateMatch, makeFixtures, slotTime, firstSlotAfter, mondayOf, osloParts, emptyTable, tableOrder,
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
@@ -1119,6 +1122,18 @@ function makeStore({db, uid, now}){
       await retry(()=>teamRef(ti).update({players:t.players}));
     });
   }
+  /* oppstilling for en bestemt kamp (runde i inneværende sesong). lineup=null fjerner egen oppstilling */
+  async function saveRoundLineup(i, r, lineup){
+    const ls=await refs.league.get(); if(!ls.exists) fail('Ligaen finnes ikke.'); const L=ls.data();
+    if(!Number.isInteger(r)||r<L.r||r>=E.ROUNDS) fail('Denne kampen kan ikke endres.');
+    if(r===L.r && now()>=E.slotTime(L.anchor,L.g)) fail('Kampen har startet. Oppstillingen er låst.');
+    const t=(await teamRef(i).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+    const lus={...(t.lus||{})};
+    for(const k of Object.keys(lus)){ const [ks,kr]=k.split('-').map(Number); if(ks<L.s||(ks===L.s&&kr<L.r)) delete lus[k]; }
+    const key=L.s+'-'+r;
+    if(lineup) lus[key]=lineup; else delete lus[key];
+    await retry(()=>teamRef(i).update({lus}));
+  }
   async function saveTraining(i, training){ await retry(()=>teamRef(i).update({training})); }
   async function renameTeam(i, name){
     const teams=await readAllTeams(); name=cleanName(name,teams,i);
@@ -1192,7 +1207,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
 }
 
 /* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */

@@ -289,6 +289,42 @@ body.loggedout .acct{display:none}
 .subchip{font-size:13px;display:inline-flex;gap:5px;align-items:center}
 .subchip b.rt{display:inline-block;min-width:30px;text-align:center;padding:1px 4px;border-radius:3px;background:var(--surface2);font-family:var(--f-display)}
 
+/* kamper-liste */
+.fx .fxh{grid-column:1/-1;font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fx .fxh .go{margin-left:auto;font-weight:600;color:var(--link)}
+.chip{display:inline-block;font:600 11px/1 var(--f-body);letter-spacing:.05em;text-transform:uppercase;padding:3px 6px;border-radius:2px;background:var(--surface2);color:var(--muted)}
+.chip.w{background:color-mix(in srgb,var(--good) 22%,var(--surface));color:var(--good)}
+.chip.l{background:color-mix(in srgb,var(--bad) 20%,var(--surface));color:var(--bad)}
+.chip.d{background:var(--surface2);color:var(--ink)}
+.chip.live{background:var(--bad);color:#fff}
+.chip.own{background:var(--accent);color:var(--accent-ink)}
+.fx.up .sc{color:var(--muted)}
+/* flaks-nål */
+.gauge{width:100%;max-width:340px;display:block;margin:0 auto}
+.gauge .ga{fill:none;stroke-width:14}
+.gauge .ga.h{stroke:var(--pitch)}.gauge .ga.a{stroke:var(--accent)}
+.gauge .gt line{stroke:var(--ink);stroke-width:2;opacity:.45}
+.gauge .needle{transform-origin:120px 112px;transform-box:view-box;animation:needle 1s cubic-bezier(.2,.8,.2,1) forwards}
+.gauge .needle line{stroke:var(--ink);stroke-width:5;stroke-linecap:round}
+.gauge .needle polygon{fill:var(--ink)}
+.gauge .hub{fill:var(--ink)}
+@keyframes needle{from{transform:rotate(0deg)}to{transform:rotate(var(--a))}}
+@media (prefers-reduced-motion:reduce){.gauge .needle{animation:none;transform:rotate(var(--a))}}
+.llab .mid{text-align:center;flex:1}
+/* dra og slipp */
+.slot{touch-action:none}
+.grip{color:var(--muted);cursor:grab;touch-action:none;padding:6px 4px;user-select:none;font-size:14px;letter-spacing:-2px}
+td.gr{width:22px;padding:0 0 0 6px}
+tr[data-drag]{cursor:grab}
+.slot.over .dot{outline:3px solid var(--accent);outline-offset:3px}
+tr.over td{background:color-mix(in srgb,var(--accent) 25%,var(--surface))}
+body.dragging{user-select:none;cursor:grabbing}
+.dragghost{position:fixed;left:0;top:0;z-index:99;pointer-events:none;background:var(--ink);color:var(--bg);padding:5px 10px;border-radius:3px;font:600 13px var(--f-body);box-shadow:0 4px 12px rgba(0,0,0,.35);white-space:nowrap}
+th.hl,td.hl{background:color-mix(in srgb,var(--accent) 14%,var(--surface))}
+.nr{display:inline-block;min-width:20px;text-align:center;font:700 11px var(--f-display);background:var(--surface2);border-radius:3px;padding:1px 3px;color:var(--muted)}
+
+@media (min-width:901px){.lineup .pitchbox{position:sticky;top:12px}}
+
 </style>
 </head>
 <body>
@@ -1162,7 +1198,10 @@ function simulateRound(league, teams, market, names){
     const Ht=teams[h], At=teams[a];
     if(!Ht.owner && (!Ht.lineup || g%3===0)) Ht.lineup=autoLineup(Ht);
     if(!At.owner && (!At.lineup || g%3===0)) At.lineup=autoLineup(At);
-    const res=simulateMatch(Ht,At,rngFrom(`m-${league.s}-${rd}-${h}-${a}`));
+    const key=league.s+'-'+rd;
+    const withLu=T=>(T.lus&&T.lus[key])?{...T, lineup:JSON.parse(JSON.stringify(T.lus[key]))}:T;
+    const res=simulateMatch(withLu(Ht),withLu(At),rngFrom(`m-${league.s}-${rd}-${h}-${a}`));
+    for(const T of [Ht,At]){ if(T.lus){ for(const k of Object.keys(T.lus)){ const [ks,kr]=k.split('-').map(Number); if(ks<league.s||(ks===league.s&&kr<=rd)) delete T.lus[k]; } } }
     doc.m.push(Object.assign({h,a},res));
     out.changed.add(h); out.changed.add(a);
   }
@@ -1214,7 +1253,7 @@ return {
   SK, SKI, SK_NAME, SK_SHORT, SEC, SEC_NAME, SPEC, SPEC_INFO, ROLE_NAME, ORDER_NAME, SLOT_NAME, SLOT_ROLE, SLOT_SIDE, ROLES,
   N_TEAMS, ROUNDS, SQUAD_MIN, SQUAD_MAX, FORMATIONS, LAYOUT, CT, REL, ROLE_SC, TEAM_DEFS, PRIZES, START_MONEY,
   ordersFor, orderedContribs, calcRatings, slotScore, autoLineup, ensureLineup, lineupQuality, teamStrength, assignFormation,
-  bestRole, ability, value, wage, cost, ageTrainF, trainingRate, lineupRoles, trainShare, formMult,
+  bestRole, ROLE_SC, ability, value, wage, cost, ageTrainF, trainingRate, lineupRoles, trainShare, formMult,
   genPlayer, genMarketPlayer, genYouth, genSquad, newTeam, mapById,
   simulateMatch, makeFixtures, slotTime, firstSlotAfter, mondayOf, osloParts, emptyTable, tableOrder,
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
@@ -1421,6 +1460,18 @@ function makeStore({db, uid, now}){
       await retry(()=>teamRef(ti).update({players:t.players}));
     });
   }
+  /* oppstilling for en bestemt kamp (runde i inneværende sesong). lineup=null fjerner egen oppstilling */
+  async function saveRoundLineup(i, r, lineup){
+    const ls=await refs.league.get(); if(!ls.exists) fail('Ligaen finnes ikke.'); const L=ls.data();
+    if(!Number.isInteger(r)||r<L.r||r>=E.ROUNDS) fail('Denne kampen kan ikke endres.');
+    if(r===L.r && now()>=E.slotTime(L.anchor,L.g)) fail('Kampen har startet. Oppstillingen er låst.');
+    const t=(await teamRef(i).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+    const lus={...(t.lus||{})};
+    for(const k of Object.keys(lus)){ const [ks,kr]=k.split('-').map(Number); if(ks<L.s||(ks===L.s&&kr<L.r)) delete lus[k]; }
+    const key=L.s+'-'+r;
+    if(lineup) lus[key]=lineup; else delete lus[key];
+    await retry(()=>teamRef(i).update({lus}));
+  }
   async function saveTraining(i, training){ await retry(()=>teamRef(i).update({training})); }
   async function renameTeam(i, name){
     const teams=await readAllTeams(); name=cleanName(name,teams,i);
@@ -1494,7 +1545,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
 }
 
 </script>
@@ -1626,6 +1677,7 @@ const ORDER_HELP={normal:'Vanlig spill uten spesielle ordre.',def:'Mer forsvar, 
 const FORM_LABEL=['','Elendig','Svak','Dårlig','Middels','God','Veldig god','Utmerket','Eksepsjonell'];
 const NO_TEAM_TXT='Du har ikke noe lag ennå. Velg et lag under Lag.';
 
+let drag=null;
 /* ---------- hjelpere ---------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=(s,el)=>(el||document).querySelector(s);
@@ -1662,6 +1714,15 @@ function toast(msg,err){ const el=document.createElement('div'); el.className='t
 async function run(fn,ok){ try{ const r=await fn(); if(ok) toast(typeof ok==='function'?ok(r):ok); return r; }catch(e){ toast((e&&e.message)||'Noe gikk galt.',true); } }
 function nextSlotInfo(){ const L=S.league; return {t:E.slotTime(L.anchor,L.g), r:L.r, s:L.s}; }
 function roundDoc(){ const L=S.league; return L&&L.ph?S.rounds[L.r]||null:null; }
+function nextRound(){ const L=S.league; if(!L) return null; const r=Date.now()>=E.slotTime(L.anchor,L.g)?L.r+1:L.r; return r<E.ROUNDS?r:null; }
+function roundTime(r){ const L=S.league; return E.slotTime(L.anchor,L.g+(r-L.r)); }
+const luKey=r=>S.league.s+'-'+r;
+function luFor(t,r){ return (r!=null&&t.lus&&t.lus[luKey(r)])||t.lineup||E.autoLineup(clone(t)); }
+function perMatch(){ const nr=nextRound(); return S.lr!=null&&nr!=null&&S.lr>=nr; }
+function curLU(t){ return perMatch()?luFor(t,S.lr):(t.lineup||E.autoLineup(clone(t))); }
+function luLocked(){ return perMatch()?false:lineupLocked(); }
+function fixFor(t,r){ const f=S.league.fx[r]; if(!f) return null; const p=f.find(x=>x[0]===t.i||x[1]===t.i); return p?{home:p[0]===t.i,opp:p[0]===t.i?p[1]:p[0]}:null; }
+function upcomingMine(t){ const nr=nextRound(), out=[]; if(nr==null) return out; for(let r=nr;r<E.ROUNDS;r++){ const f=fixFor(t,r); if(f) out.push({r,...f,time:roundTime(r),own:!!(t.lus&&t.lus[luKey(r)])}); } return out; }
 function lineupLocked(){ const L=S.league; return !!L && Date.now()>=E.slotTime(L.anchor,L.g); }
 function mkey(m,doc){ return doc.id?('f'+doc.id):(doc.s+'-'+doc.r+'-'+m.h); }
 function liveOf(m,doc,noRp){
@@ -1718,7 +1779,7 @@ function viewHome(){
   }
   const n=nextSlotInfo(); const fx=fixtureOf(t.i); const opp=fx?S.teams[fx.opp]:null;
   const rdoc=roundDoc(); const myM=rdoc&&rdoc.m.find(m=>m.h===t.i||m.a===t.i);
-  const mine=E.calcRatings(t.players,t.lineup||E.autoLineup(clone(t)));
+  const mine=E.calcRatings(t.players,luFor(t,nextRound()));
   let nextCard=`<div class="card"><h3>Neste kamp <small>${fmtTime(n.t)} · ${until(n.t)}</small></h3>`;
   if(opp){
     const ol=opp.lineup||E.autoLineup(clone(opp)); const or=E.calcRatings(opp.players,ol);
@@ -1742,12 +1803,13 @@ function viewHome(){
 
 function viewLineup(){
   const t=myTeam(); if(!t) return needTeam();
-  const lu=t.lineup||E.autoLineup(clone(t)); const by=E.mapById(t.players); const slots=E.slotsOf(lu); const lay=E.layoutOf(lu);
+  { const nr=nextRound(); if(S.lr!=null&&(nr==null||S.lr<nr)) S.lr=null; }
+  const lu=curLU(t); const by=E.mapById(t.players); const slots=E.slotsOf(lu); const lay=E.layoutOf(lu);
   const r=E.calcRatings(t.players,lu,by);
   if(S.sel>=11) S.sel=0;
   const pitchSvg=`<svg viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true"><rect x="1" y="1" width="98" height="126"/><line x1="1" y1="64" x2="99" y2="64"/><circle cx="50" cy="64" r="10"/><rect x="24" y="1" width="52" height="19"/><rect x="38" y="1" width="24" height="7"/><rect x="24" y="108" width="52" height="19"/><rect x="38" y="120" width="24" height="7"/></svg>`;
   const chips=slots.map((st,i)=>{ const p=by[lu.sl[i]]; const o=(lu.o&&lu.o[i])||'normal';
-    return `<button class="slot${p?'':' empty'}" style="left:${lay[i][0]}%;top:${lay[i][1]}%" data-act="selslot" data-i="${i}" aria-pressed="${S.sel===i}" title="${E.SLOT_NAME[st]}"><span class="dot" style="background:${t.c[0]};color:${textOn(t.c[0])}">${SLOT_CODE[st]}</span><span class="nm">${p?esc(surname(p)):'Tom'}</span>${o!=='normal'?`<span class="ord">${ordLabel(st,o)}</span>`:''}</button>`; }).join('');
+    return `<button class="slot${p?'':' empty'}" style="left:${lay[i][0]}%;top:${lay[i][1]}%" data-drag="slot" data-drop="slot" data-i="${i}" data-act="selslot" data-i="${i}" aria-pressed="${S.sel===i}" title="${E.SLOT_NAME[st]}"><span class="dot" style="background:${t.c[0]};color:${textOn(t.c[0])}">${SLOT_CODE[st]}</span><span class="nm">${p?esc(surname(p)):'Tom'}</span>${o!=='normal'?`<span class="ord">${ordLabel(st,o)}</span>`:''}</button>`; }).join('');
   const xi=lu.sl.map(id=>by[id]).filter(Boolean).sort((a,b)=>b.s[6]-a.s[6]);
   const tool=`<div class="row"><label class="f">Formasjon<select id="formation" data-change="formation">${Object.keys(E.FORMATIONS).map(f=>`<option value="${f}"${f===lu.f?' selected':''}>${f}</option>`).join('')}</select></label>
   <label class="f">Dødballtaker<select id="taker" data-change="taker">${xi.map(p=>`<option value="${p.id}"${p.id===lu.tk?' selected':''}>${esc(p.n)} (${p.s[6]})</option>`).join('')}</select></label>
@@ -1757,17 +1819,57 @@ function viewLineup(){
   if(['DL','DC','DR'].includes(st)){ const base=E.FORMATIONS[lu.f]; const di=E.defIdx(base); const al=E.defAllowed(di.indexOf(i),di.length);
     if(al.length>1){ const nm={DC:'Midtstopper',DL:'Venstre back',DR:'Høyre back'};
       roleCtl=`<div class="row" style="margin-bottom:6px"><div class="seg" role="group" aria-label="Rolle i forsvaret">${al.map(r=>{ const t2=slots.slice(); t2[i]=r; return `<button data-act="role" data-r="${r}" aria-pressed="${r===st}"${E.validTy(base,t2)?'':' disabled'}>${nm[r]}</button>`; }).join('')}</div></div><p class="tiny muted" style="margin:0 0 12px">Du kan stille med inntil tre midtstoppere og én back på hver side.</p>`; } }
-  const topSk=[...new Set(E.CT[st].slice().sort((a,b)=>b[2]-a[2]).map(c=>c[1]))].slice(0,3);
-  const cand=t.players.slice().sort((a,b)=>E.slotScore(b,st)-E.slotScore(a,st));
+  const cand=sortCand(t.players,st);
   const where=id=>{ const j=lu.sl.indexOf(id); return j<0?'<span class="muted">Benk</span>':j===i?'<b>Her</b>':SLOT_CODE[slots[j]]; };
   const editor=`<div class="card"><h3>${E.SLOT_NAME[st]} <small>${cur?esc(cur.n):'Ingen spiller'}</small></h3>
   ${roleCtl}<div class="row" style="margin-bottom:6px"><div class="seg" role="group" aria-label="Spilleordre">${E.ordersFor(st).map(o=>`<button data-act="order" data-o="${o}" aria-pressed="${o===ord}">${ordLabel(st,o)}</button>`).join('')}</div></div>
   <p class="small muted" style="margin:0 0 12px;max-width:60ch">${ordHelp(st,ord)}</p>
-  <div class="tablewrap" style="max-height:340px;overflow:auto"><table><thead><tr><th>Spiller</th><th class="c">Nå</th>${topSk.map(k=>`<th class="c" title="${E.SK_NAME[k]}">${E.SK_SHORT[k]}</th>`).join('')}<th class="c">Form</th></tr></thead><tbody>
-  ${cand.map(p=>`<tr class="click${p.id===lu.sl[i]?' me':''}" data-act="assign" data-id="${p.id}"><td><span class="pname">${esc(p.n)}</span>${specBadge(p)}${isSus(p)?' <span class="tag red">Utestengt</span>':''}<div class="tiny muted">${roleOf(p)}, ${ageStr(p)}</div></td><td class="c">${where(p.id)}</td>${topSk.map(k=>`<td class="c">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td></tr>`).join('')}</tbody></table></div></div>`;
+  <div class="row" style="margin:0 0 8px;align-items:flex-end"><label class="f">Sorter spillere etter<select data-change="lsort">${sortOpts()}</select></label><span class="tiny muted" style="flex:1;min-width:160px">Dra en spiller fra listen til banen, eller dra mellom plassene på banen for å bytte. Du kan også trykke på en spiller.</span></div>
+  <div class="tablewrap" style="max-height:380px;overflow:auto"><table><thead><tr><th></th><th>Spiller</th><th class="c">Nå</th>${metricHead()}${E.SK.map(k=>`<th class="c${S.lsort==='sk:'+k?' hl':''}" title="${E.SK_NAME[k]}">${E.SK_SHORT[k]}</th>`).join('')}<th class="c">Form</th></tr></thead><tbody>
+  ${cand.map(p=>`<tr class="click${p.id===lu.sl[i]?' me':''}" data-act="assign" data-id="${p.id}" data-drag="player" data-drop="player"><td class="gr"><span class="grip" aria-hidden="true">⋮⋮</span></td><td><span class="pname">${p.no!=null?`<span class="nr">${p.no}</span> `:''}${esc(p.n)}</span>${specBadge(p)}${isSus(p)?' <span class="tag red">Utestengt</span>':''}<div class="tiny muted">${roleOf(p)}, ${ageStr(p)}</div></td><td class="c">${where(p.id)}</td>${metricCell(p,st)}${E.SK.map(k=>`<td class="c${S.lsort==='sk:'+k?' hl':''}">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td></tr>`).join('')}</tbody></table></div></div>`;
   const extra=capSubsPanel(t,lu,by,xi);
   const rat=`<div class="card"><h3>Lagets ratinger <small>etter form og spesialiteter</small></h3>${ratingsHtml(r)}</div>`;
-  return `${lineupLocked()?'<div class="note" style="margin-bottom:16px">Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.</div>':''}<div class="lineup"><div class="pitchbox">${tool}<div class="pitch">${pitchSvg}${chips}</div><p class="tiny muted" style="margin:0">Trykk på en spiller på banen, og velg så hvem som skal spille der.</p></div><div class="grid">${rat}${editor}${extra}</div></div>`;
+  const per=perMatch(); const nr=nextRound(); const ups=upcomingMine(t);
+  const sel=`<div class="card"><div class="row" style="align-items:flex-end"><label class="f" style="flex:1;min-width:220px">Oppstillingen gjelder for<select data-change="lround"><option value="">Standard (kamper uten egen oppstilling)</option>${ups.map(u=>`<option value="${u.r}"${S.lr===u.r?' selected':''}>Runde ${u.r+1} · ${fmtTime(u.time)} · ${u.home?'hjemme mot ':'borte mot '}${esc(S.teams[u.opp].name)}${u.own?' · egen oppstilling':''}</option>`).join('')}</select></label>
+  ${per?`<button class="btn sm" data-act="lu2default" title="Gjør denne oppstillingen til standard for alle kamper uten egen oppstilling"${lineupLocked()?' disabled':''}>Bruk som standard</button>${t.lus&&t.lus[luKey(S.lr)]?'<button class="btn sm danger" data-act="luclear">Fjern egen oppstilling</button>':''}`:''}</div>
+  <p class="tiny muted" style="margin:8px 0 0;max-width:70ch">${per?(t.lus&&t.lus[luKey(S.lr)]?'Denne kampen har en egen oppstilling. Det du endrer her gjelder bare denne kampen.':'Denne kampen bruker standardoppstillingen. Endrer du noe, lagres en egen oppstilling for akkurat denne kampen.'):'Standardoppstillingen brukes i alle kamper som ikke har en egen oppstilling. Velg en kommende kamp for å sette opp noe annet, også flere uker frem i tid.'}</p></div>`;
+  const cmp=compareCard(t,lu,per?S.lr:nr);
+  return `${luLocked()?'<div class="note" style="margin-bottom:16px">Kampene pågår. Standardoppstillingen er låst til alle kamper er ferdige, men du kan sette opp kommende kamper.</div>':''}<div style="margin-bottom:16px">${sel}</div><div class="lineup"><div class="pitchbox">${tool}<div class="pitch" id="pitch">${pitchSvg}${chips}</div><p class="tiny muted" style="margin:0">Trykk på en spiller på banen og velg hvem som skal spille der, eller dra og slipp.</p></div><div class="grid">${editor}${rat}${cmp}${extra}</div></div>`;
+}
+
+/* ---------- sortering av spillerlisten i oppstillingen ---------- */
+function sortOpts(){
+  const k=S.lsort||'fit'; const o=(v,n)=>`<option value="${v}"${k===v?' selected':''}>${n}</option>`;
+  return o('fit','Passer best til valgt plass')+`<optgroup label="Egenskap">${E.SK.map(x=>o('sk:'+x,E.SK_NAME[x])).join('')}</optgroup><optgroup label="Posisjon">${E.ROLES.map(x=>o('rl:'+x,E.ROLE_NAME[x])).join('')}</optgroup>`+o('form','Form');
+}
+function sortCand(list,st){
+  const k=S.lsort||'fit'; const a=list.slice(); const fit=(x,y)=>E.slotScore(y,st)-E.slotScore(x,st);
+  if(k.startsWith('sk:')){ const i=E.SKI[k.slice(3)]; return a.sort((x,y)=>y.s[i]-x.s[i]||fit(x,y)); }
+  if(k.startsWith('rl:')){ const f=E.ROLE_SC[k.slice(3)]; return a.sort((x,y)=>f(y)-f(x)); }
+  if(k==='form') return a.sort((x,y)=>(y.f||5)-(x.f||5)||fit(x,y));
+  return a.sort(fit);
+}
+function metricHead(){ const k=S.lsort||'fit'; return (k==='fit'||k.startsWith('rl:'))?`<th class="c hl" title="${k==='fit'?'Hvor godt spilleren passer til valgt plass':'Hvor godt spilleren passer til rollen'}">Passer</th>`:''; }
+function metricCell(p,st){ const k=S.lsort||'fit'; if(k==='fit') return `<td class="c hl num">${E.slotScore(p,st).toFixed(1)}</td>`; if(k.startsWith('rl:')) return `<td class="c hl num">${E.ROLE_SC[k.slice(3)](p).toFixed(1)}</td>`; return ''; }
+
+/* ---------- sammenligning med motstanderen ---------- */
+function oppPast(oi,n){
+  const out=[]; Object.values(S.rounds).filter(d=>d&&d.m&&d.s===S.league.s).sort((a,b)=>b.r-a.r).forEach(d=>{
+    if(out.length>=n) return; const m=d.m.find(x=>x.h===oi||x.a===oi); if(!m) return; if(liveOf(m,d,true).st!=='done') return;
+    const home=m.h===oi; const arr=(m.rs&&m.rs.length)?m.rs.map(x=>home?x[1]:x[2]):[home?m.hr:m.ar]; const rat=[0,0,0,0,0,0,0]; arr.forEach(a=>a.forEach((v,k)=>rat[k]+=v/arr.length));
+    out.push({r:d.r,home,rat,gf:home?m.hg:m.ag,ga:home?m.ag:m.hg,f:home?m.hf:m.af,vs:home?m.a:m.h});
+  }); return out;
+}
+function compareCard(t,lu,r){
+  if(r==null) return ''; const fx=fixFor(t,r); if(!fx) return ''; const opp=S.teams[fx.opp]; if(!opp) return '';
+  const mine=E.calcRatings(t.players,lu); const past=oppPast(fx.opp,5);
+  const mode=(S.cmp==='now'||!past.length)?'now':'hist';
+  let oppR; if(mode==='hist'){ oppR=[0,0,0,0,0,0,0]; past.forEach(p=>p.rat.forEach((v,k)=>oppR[k]+=v/past.length)); } else oppR=E.calcRatings(opp.players,opp.lineup||E.autoLineup(clone(opp)));
+  const hist=past.length?`<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Runde</th><th>Mot</th><th class="c">Formasjon</th><th class="r">Resultat</th></tr></thead><tbody>${past.map(p=>`<tr><td class="num">${p.r+1}</td><td>${p.home?'H':'B'} ${esc(S.teams[p.vs].name)}</td><td class="c">${esc(p.f)}</td><td class="r num"><b>${p.gf}–${p.ga}</b></td></tr>`).join('')}</tbody></table></div>`:'';
+  return `<div class="card"><h3>Mot ${esc(opp.name)} <small>${fx.home?'Du spiller hjemme':'Du spiller borte'}</small></h3>
+  <div class="row" style="margin-bottom:10px"><div class="seg"><button data-act="cmpmode" data-v="hist" aria-pressed="${mode==='hist'}"${past.length?'':' disabled'}>Slik har de spilt</button><button data-act="cmpmode" data-v="now" aria-pressed="${mode==='now'}">Deres oppstilling nå</button></div></div>
+  <div class="duels">${duelsInner({hr:mine,ar:oppR},t,opp,0)}</div>
+  <p class="tiny muted" style="margin:10px 0 0;max-width:62ch">Venstre er din oppstilling slik den er satt opp nå (${esc(lu.f)}), høyre er ${mode==='hist'?`snittet av ${esc(opp.name)} sine ${past.length} siste kamper denne sesongen, med hjemmebanefordel og dagsform`:`${esc(opp.name)} sin nåværende oppstilling`}. ${past.length?'':'De har ikke spilt noen kamper ennå denne sesongen. '}Høyere søyle vinner duellen.</p>${mode==='hist'?hist:''}</div>`;
 }
 
 function capSubsPanel(t,lu,by,xi){
@@ -1793,7 +1895,7 @@ function capSubsPanel(t,lu,by,xi){
   <div class="card"><h3>Planlagte bytter <small>${subs.length} av 5</small></h3>
   <p class="small muted" style="margin:0 0 12px;max-width:62ch">Byttet gjøres tidligst ved valgt minutt, og bare hvis betingelsen er oppfylt. For å sette inn en ekstra angriper når dere ligger under, velger du «Ved tap», lar en forsvarsspiller gå ut og velger «Spiss» som posisjon. Du kan bytte inntil fem ganger. Spillere som er byttet ut, kan ikke komme inn igjen.</p>
   ${subs.length?subs.map(row).join(''):'<div class="empty" style="padding:14px 0">Ingen bytter planlagt.</div>'}
-  <div class="row" style="margin-top:12px"><button class="btn primary" data-act="subadd"${subs.length>=5||lineupLocked()?' disabled':''}>Legg til bytte</button></div></div>`;
+  <div class="row" style="margin-top:12px"><button class="btn primary" data-act="subadd"${subs.length>=5||luLocked()?' disabled':''}>Legg til bytte</button></div></div>`;
 }
 function needTeam(){ return `<div class="card empty">${NO_TEAM_TXT}<div style="margin-top:12px"><button class="btn primary" data-act="tab" data-k="clubs">Gå til Lag</button></div></div>`; }
 
@@ -1900,9 +2002,9 @@ function gameRow(m,doc,me,r){
   const H=S.teams[m.h], A=S.teams[m.a]; const lv=liveOf(m,doc); const mine=m.h===me||m.a===me;
   const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}`;
   const sub=(lv.st==='live'||lv.st==='break')?`<small class="live">${lv.label}</small>`:'';
-  return `<button class="fx${mine?' me':''}${S.watch&&S.watch.r===r&&S.watch.h===m.h?' sel':''}" data-act="match" data-r="${r}" data-h="${m.h}"><span class="t">${crest(H,20)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}${sub}</span><span class="t a">${crest(A,20)}<span>${esc(A.name)}</span></span></button>`;
+  return `<button class="fx${mine?' me':''}${S.watch&&S.watch.r===r&&S.watch.h===m.h?' sel':''}" data-act="rbmatch" data-r="${r}" data-h="${m.h}"><span class="t">${crest(H,20)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}${sub}</span><span class="t a">${crest(A,20)}<span>${esc(A.name)}</span></span></button>`;
 }
-function viewGames(){
+function viewRoundBrowser(){
   const L=S.league; const t=myTeam(); const me=t?t.i:-1;
   if(S.round==null) S.round=L.ph?L.r:Math.max(0,L.r-1);
   const r=S.round; const doc=S.rounds[r];
@@ -1920,8 +2022,39 @@ function viewGames(){
   }
   const status=doc?(doc.live?'pågår':'ferdig'):'ikke spilt';
   return `<div class="sectionhead"><h2>Kamper</h2><span class="muted small">Sesong ${L.s}</span></div>
-  <div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="rnd" data-d="-1"${r<=0?' disabled':''}>Forrige</button><b class="num">Runde ${r+1} av ${E.ROUNDS}</b><button class="btn sm" data-act="rnd" data-d="1"${r>=E.ROUNDS-1?' disabled':''}>Neste</button><span class="muted small">${fmtTime(when)} · ${status}</span><span class="spacer"></span>${t?`<button class="btn sm" data-act="mine" aria-pressed="${S.mine}">${S.mine?'Vis alle kamper':'Bare mine kamper'}</button>`:''}</div>${body}${panel}`;
+  <div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="rnd" data-d="-1"${r<=0?' disabled':''}>Forrige</button><b class="num">Runde ${r+1} av ${E.ROUNDS}</b><button class="btn sm" data-act="rnd" data-d="1"${r>=E.ROUNDS-1?' disabled':''}>Neste</button><span class="muted small">${fmtTime(when)} · ${status}</span><span class="spacer"></span>${t?`<button class="btn sm" data-act="gmode" data-v="mine">Mine kamper</button><button class="btn sm" data-act="mine" aria-pressed="${S.mine}">${S.mine?'Vis alle kamper':'Bare mine kamper'}</button>`:''}</div>${body}${panel}`;
 }
+
+/* ---------- Kamper: mine spilte og kommende kamper ---------- */
+function viewGames(){
+  const t=myTeam();
+  if(S.md) return viewMatchDetail();
+  if(!t || S.gm==='all') return viewRoundBrowser();
+  return viewMyMatches(t);
+}
+function resChip(m,me){ const gf=m.h===me?m.hg:m.ag, ga=m.h===me?m.ag:m.hg; return gf>ga?['w','Seier']:gf<ga?['l','Tap']:['d','Uavgjort']; }
+function viewMyMatches(t){
+  const L=S.league; const me=t.i;
+  const docs=Object.values(S.rounds).filter(d=>d&&d.m&&d.s===L.s).sort((a,b)=>b.r-a.r);
+  const played=[]; docs.forEach(d=>{ const m=d.m.find(x=>x.h===me||x.a===me); if(m) played.push({d,m,lv:liveOf(m,d,true)}); });
+  const ups=upcomingMine(t);
+  const row=(r,m,H,A,sc,head,cls,act)=>`<button class="fx me ${cls||''}" data-act="${act}" data-r="${r}" data-h="${H.i}"><span class="fxh">${head}</span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}</span><span class="t a">${crest(A,22)}<span>${esc(A.name)}</span></span></button>`;
+  const up=ups.length?ups.map(u=>{ const H=S.teams[u.home?me:u.opp], A=S.teams[u.home?u.opp:me];
+    return row(u.r,null,H,A,'–',`Runde ${u.r+1} · ${fmtTime(u.time)} <span class="chip ${u.own?'own':''}">${u.own?'Egen oppstilling':'Standardoppstilling'}</span> <span class="go">Sett opp laget →</span>`,'up','editround'); }).join(''):`<div class="empty">Ingen flere kamper denne sesongen. Nye terminer kommer når sesongen er over.</div>`;
+  const pl=played.length?played.map(({d,m,lv})=>{ const H=S.teams[m.h],A=S.teams[m.a]; const live=lv.st==='live'||lv.st==='break'; const [c,l]=resChip(m,me);
+    const chip=live?`<span class="chip live">Pågår ${esc(lv.label)}</span>`:lv.st==='done'?`<span class="chip ${c}">${l}</span>`:'';
+    const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}`;
+    return row(d.r,m,H,A,sc,`Runde ${d.r+1} · ${fmtTime(d.t)} ${chip}`,'','match'); }).join(''):`<div class="empty">Ingen kamper spilt ennå denne sesongen.</div>`;
+  return `<div class="sectionhead"><h2>Mine kamper</h2><span class="muted small">Sesong ${L.s}</span><span class="spacer"></span><button class="btn sm" data-act="gmode" data-v="all">Alle kamper i en runde</button></div>
+  <div class="grid g2" style="align-items:start"><div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 0">Kommende kamper</h3><p class="tiny muted" style="margin:4px 16px 8px">Trykk på en kamp for å sette opp lag, formasjon, dødballtaker og bytter akkurat for den kampen.</p>${up}</div>
+  <div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 0">Spilte kamper</h3><p class="tiny muted" style="margin:4px 16px 8px">Trykk på en kamp for resultat, ratinger, spillerratinger og flaks.</p>${pl}</div></div>`;
+}
+function viewMatchDetail(){
+  const {r,h}=S.md; const doc=S.rounds[r]; const m=doc&&doc.m.find(x=>x.h===h);
+  if(!m){ S.md=null; return viewGames(); }
+  return `<div class="sectionhead"><h2>Kamp</h2><span class="muted small">Runde ${r+1} · ${fmtTime(doc.t)}</span></div><div class="row" style="margin-bottom:4px"><button class="btn sm" data-act="mdback">← Tilbake til kamper</button></div>${matchPanel(doc,m)}`;
+}
+
 /* ---------- ratinger som søyler, spillerrating, flaks ---------- */
 function ratAt(m,el){
   if(!m.rs||!m.rs.length) return {h:m.hr,a:m.ar,t:null};
@@ -1955,15 +2088,17 @@ function duelsCard(m,H,A,lv,key){
 function luckHtml(m,H,A){
   if(!m.xg) return '';
   const d=(m.hg-m.xg[0])-(m.ag-m.xg[1]);
-  const pos=Math.max(4,Math.min(96,50-d/3*50));
-  const ad=Math.abs(d); const who=d>0?H.name:A.name; const dir=d>0.25?'h':d<-0.25?'a':'';
-  const verdict=ad<0.4?'Resultatet var rettferdig. Ingen av lagene var spesielt heldige.':`${esc(who)} var ${ad<1?'litt':ad<1.8?'ganske':'veldig'} heldig. ${esc(d>0?A.name:H.name)} fortjente mer, ut fra sjansene.`;
-  const left=Math.min(50,pos), w=Math.abs(pos-50);
-  return `<div class="caps" style="margin:18px 0 8px">Flaks og uflaks</div>
-  <div class="luck"><div class="ltrack"><i class="lc"></i>${dir?`<i class="lfill ${dir}" style="left:${left}%;width:${w}%"></i>`:''}<span class="lmark ${dir||'n'}" style="left:${pos}%">${dir==='h'?'◀':dir==='a'?'▶':'●'}</span></div>
-  <div class="llab"><span>Flaks for ${esc(H.short)}</span><span>Flaks for ${esc(A.short)}</span></div></div>
-  <p class="small" style="margin:10px 0 0">${verdict}</p>
-  <p class="tiny muted" style="margin:4px 0 0">Forventede mål ut fra sjansenes kvalitet: ${esc(H.short)} ${m.xg[0].toFixed(1)}, ${esc(A.short)} ${m.xg[1].toFixed(1)}. Faktisk resultat ${m.hg}–${m.ag}.</p>`;
+  const ang=Math.round(Math.max(-1,Math.min(1,-d/3))*78);
+  const ad=Math.abs(d); const who=d>0?H.name:A.name;
+  const verdict=ad<0.4?'Resultatet var rettferdig. Ingen av lagene var spesielt heldige eller uheldige.':`${esc(who)} var ${ad<1?'litt':ad<1.8?'ganske':'veldig'} heldig. ${esc(d>0?A.name:H.name)} fortjente mer, ut fra sjansene.`;
+  const tick=a=>{ const r=a*Math.PI/180; return `<line x1="${(120+86*Math.sin(r)).toFixed(1)}" y1="${(112-86*Math.cos(r)).toFixed(1)}" x2="${(120+96*Math.sin(r)).toFixed(1)}" y2="${(112-96*Math.cos(r)).toFixed(1)}"/>`; };
+  return `<div class="caps" style="margin:18px 0 4px">Flaks og uflaks</div>
+  <div class="luck"><svg viewBox="0 0 240 132" class="gauge" role="img" aria-label="${esc(verdict)}"><path d="M20 112 A100 100 0 0 1 120 12" class="ga h"/><path d="M120 12 A100 100 0 0 1 220 112" class="ga a"/>
+  <g class="gt">${[-78,-52,-26,0,26,52,78].map(tick).join('')}</g>
+  <g class="needle" style="--a:${ang}deg"><line x1="120" y1="112" x2="120" y2="40"/><polygon points="120,22 109,46 131,46"/></g><circle cx="120" cy="112" r="7" class="hub"/></svg>
+  <div class="llab"><span>Flaks for ${esc(H.short)}</span><span class="mid">Rettferdig</span><span>Flaks for ${esc(A.short)}</span></div></div>
+  <p class="small" style="margin:8px 0 0">${verdict}</p>
+  <p class="tiny muted" style="margin:4px 0 0">Forventede mål ut fra sjansenes kvalitet: ${esc(H.short)} ${m.xg[0].toFixed(1)}, ${esc(A.short)} ${m.xg[1].toFixed(1)}. Faktisk resultat ${m.hg}–${m.ag}. Pilen heller mot laget som fikk mer ut av sjansene enn de fortjente.</p>`;
 }
 function lineupRatingsHtml(m,H,A){
   if(!m.pr||!m.ty) return '';
@@ -2007,10 +2142,13 @@ function matchPanel(doc,m){
   const H=S.teams[m.h],A=S.teams[m.a]; const lv=liveOf(m,doc); const key=mkey(m,doc);
   const feed=lv.vis.slice().reverse();
   const live=lv.st==='live'||lv.st==='break'||(S.rp&&S.rp.key===key);
+  const done=lv.st==='done';
+  const comm=`<div class="caps" style="margin:18px 0 4px">${live?'Direkte fra banen':'Kommentarer'}</div><div class="feedkey tiny muted"><span class="h">◀ ${esc(H.short)}</span><span class="a">${esc(A.short)} ▶</span></div>${feed.length?feedHtml(feed,m):`<div class="empty">Avspark ${fmtTime(doc.t)}. Kommentarene dukker opp her mens kampen pågår.</div>`}`;
   return `<div class="card" id="mp" style="margin-top:16px">${scoreHead(H,A,lv,40)}${replayCtl(doc,m,lv,key)}
+  ${done?luckHtml(m,H,A):''}
   ${lv.st==='before'?'':duelsCard(m,H,A,lv,key)}
-  ${lv.st==='done'?luckHtml(m,H,A):''}
-  <div class="caps" style="margin:18px 0 4px">${live?'Direkte fra banen':'Kommentarer'}</div><div class="feedkey tiny muted"><span class="h">◀ ${esc(H.short)}</span><span class="a">${esc(A.short)} ▶</span></div>${feed.length?feedHtml(feed,m):`<div class="empty">Avspark ${fmtTime(doc.t)}. Kommentarene dukker opp her mens kampen pågår.</div>`}${lv.st==='done'?lineupRatingsHtml(m,H,A)+playerRatingsHtml(m,H,A)+statsHtml(m,H,A):''}</div>`;
+  ${done?lineupRatingsHtml(m,H,A)+playerRatingsHtml(m,H,A)+statsHtml(m,H,A):''}
+  ${comm}</div>`;
 }
 
 const FR_ACTIVE=['open','ready','live'];
@@ -2065,7 +2203,7 @@ function viewHelp(){
   <h3>Liga og kamper</h3><ul><li>14 lag i én divisjon. Alle møter alle to ganger, så en sesong er 26 runder.</li><li>Alle lag spiller tre ganger i uka: tirsdag, fredag og søndag klokka 18.00 norsk tid.</li><li>Kampene spilles i sanntid: 45 minutter pluss tilleggstid, 15 minutter pause og så 45 minutter pluss tilleggstid. Er du inne på siden mens kampen pågår, får du kommentarer og beskjed om mål underveis.</li><li>Oppstillingen låses ved avspark og åpnes igjen når alle kamper er ferdige. Tabellen oppdateres først da.</li><li>Lag uten menneskelig manager styres av datamaskinen. Når du tar over et lag, erstatter du datamaskinen og beholder spillerne.</li><li>Spillet kjører ikke på noen server. Første som åpner siden etter avspark setter kampene i gang, og alle ser det samme med riktig klokkeslett. Kommer du inn midt i kampen, ser du først det som har skjedd så langt.</li></ul>
   <h3>Spillere og egenskaper</h3><ul><li>Alle spillere er fantasispillere. På A-laget kan spillere være 17 år og eldre.</li><li>Sju egenskaper fra 0 til 20: Keeper, Forsvar, Midtbane, Pasning, Ving, Scoring og Dødballer.</li><li>Fra 30 år mister spillerne gradvis nivå, raskere jo eldre de blir. Ving og forsvar faller først, dødballer og keeper holder lengst.</li><li>Alder måles i år og dager. Ett aldersår tilsvarer at serien er spilt to ganger (52 runder, omtrent 17 uker), og hver spiller har sin egen bursdag. Etter hver sesong legger de eldste opp, og hvert lag får en ny ungdomsspiller på 17 år.</li></ul>
   <h3>Trening</h3><ul><li>Velg én eller to egenskaper. Med to får hver av dem 60 % effekt.</li><li>Trening av forsvar gir mye til forsvarere og backer, litt til midtbane og lite til spisser. Det samme prinsippet gjelder for de andre egenskapene.</li><li>Lave nivåer går fort. Hvert nivå krever omtrent 16 % mer trening enn det forrige. Spillere fra 17 til 22 år trener opptil 2,2 ganger så fort som voksne. Treningen går sakte: en 17-åring med nivå 7 i tre egenskaper kan med ideell trening nå nivå 15 i alle tre først rundt 30-årsalderen. Spillere som ikke er med i startellveren trener med halv effekt.</li></ul>
-  <h3>Ratinger og oppstilling</h3><ul><li>Spillernes egenskaper gir sju ratinger: forsvar venstre, midten og høyre, midtbane, og angrep venstre, midten og høyre.</li><li>Backer og ving bidrar mest på sin egen side. Midtbane styrer midtbanen og hjelper midtforsvaret og midtangrepet. Pasning bidrar til angrep, men mindre enn scoring for spisser og ving for vinger.</li><li>Du kan sende en spiller i en bestemt retning. En defensiv midtbane gir mer forsvar men mindre angrep, og «Mot venstre» flytter noe av innsatsen ut på kanten.</li><li>Formen går opp og ned fra uke til uke og påvirker alle ratingene.</li><li><b>Keeper:</b> Keeperskill teller mest for keeperen. Han bidrar sterkt til midtforsvaret og litt til sidene, og avgjør mye i hver avslutning. Forsvarsskill teller ikke for keeperen. På frispark, hjørnespark og straffer teller dødball mest for keeperen, og keeperskill teller en del.</li><li><b>Ratinger i kampen:</b> Under og etter kampen vises ratingene som søyler mot hverandre: midtangrep mot midtforsvar, venstre angrep mot motstanderens høyre forsvar, høyre angrep mot venstre forsvar, og midtbane mot midtbane. Ratingene oppdateres underveis, så du ser hva bytter og røde kort gjør. Etter kampen kan du dra i glidebryteren for å se ratingene i et bestemt minutt.</li><li><b>Spillerrating:</b> Hver spiller får et tall for kampen ut fra hvor mye han bidro til lagets ratinger (egenskaper, form, rolle og ordre) som snitt over minuttene han var på banen. En spiller som byttes ut etter en flott første omgang beholder ratingen sin. 5 er typisk for rollen, 7 og over er en god kamp.</li><li><b>Flaks og uflaks:</b> Hver sjanse har en sannsynlighet for mål. Summen er forventede mål. Pilen viser hvilket lag som fikk mer ut av sjansene enn de fortjente.</li><li><b>Reprise:</b> Når du logger inn etter at en kamp er spilt, kan du velge å se den i reprise eller få resultatet direkte. Reprise finnes også under hver ferdigspilt kamp.</li><li><b>Draktnummer:</b> Under Spillere kan du gi spillerne nummer og sortere etter dem.</li><li><b>Mål fra åpent spill:</b> Om et angrep ender i mål avgjøres av lagets rating i angrepssonen (venstre, midten eller høyre) mot motstanderens forsvarsrating i samme sone, keeper inkludert. Spilleren som avslutter er bare den som får æren. Formasjonen påvirker målantallet: offensive oppsett som 3-4-3 og 3-5-2 gir flest mål, mens 5-4-1 og 5-3-2 gir få.</li><li><b>Straffer:</b> Fouler i feltet gir straffe. Den tas av dødballtakeren, og dødball teller mest for skytteren, mens scoring teller litt. Mot keeperen avgjør dødball og keeperskill.</li><li><b>Ving:</b> Settes en ving offensivt, bidrar han mer til sideangrep og litt mindre til midtbane og forsvar. Settes han mot midten, bidrar han litt mer til midtbanen, men mindre til sideforsvar og sideangrep.</li><li><b>Spiss:</b> Spissen kan spille normalt, mot siden eller defensivt. En defensiv spiss gir mer midtbane og mindre angrep.</li><li><b>Forsvar:</b> Spiller du med tre, fire eller fem forsvarsspillere, kan du velge om de spiller som midtstoppere eller backer. Maks tre midtstoppere og én back på hver side.</li></ul>
+  <h3>Ratinger og oppstilling</h3><ul><li>Spillernes egenskaper gir sju ratinger: forsvar venstre, midten og høyre, midtbane, og angrep venstre, midten og høyre.</li><li>Backer og ving bidrar mest på sin egen side. Midtbane styrer midtbanen og hjelper midtforsvaret og midtangrepet. Pasning bidrar til angrep, men mindre enn scoring for spisser og ving for vinger.</li><li>Du kan sende en spiller i en bestemt retning. En defensiv midtbane gir mer forsvar men mindre angrep, og «Mot venstre» flytter noe av innsatsen ut på kanten.</li><li>Formen går opp og ned fra uke til uke og påvirker alle ratingene.</li><li><b>Keeper:</b> Keeperskill teller mest for keeperen. Han bidrar sterkt til midtforsvaret og litt til sidene, og avgjør mye i hver avslutning. Forsvarsskill teller ikke for keeperen. På frispark, hjørnespark og straffer teller dødball mest for keeperen, og keeperskill teller en del.</li><li><b>Kamper:</b> Fanen viser dine spilte og kommende kamper. Trykk på en spilt kamp for resultat, ratinger, spillerratinger og flaks. Trykk på en kommende kamp for å sette opp laget akkurat for den kampen.</li><li><b>Oppstilling per kamp:</b> Du kan sette opp formasjon, spillere, dødballtaker, kaptein og bytter for hver kommende kamp, også flere uker frem. Kamper uten egen oppstilling bruker standardoppstillingen. Standarden er låst mens kampene pågår, men kommende kamper kan endres hele tiden. Under oppstillingen kan du sammenligne ratingene dine med motstanderens siste kamper.</li><li><b>Spillerlisten:</b> Sorter etter egenskap eller posisjon, og dra spillere til banen eller mellom plassene.</li><li><b>Ratinger i kampen:</b> Under og etter kampen vises ratingene som søyler mot hverandre: midtangrep mot midtforsvar, venstre angrep mot motstanderens høyre forsvar, høyre angrep mot venstre forsvar, og midtbane mot midtbane. Ratingene oppdateres underveis, så du ser hva bytter og røde kort gjør. Etter kampen kan du dra i glidebryteren for å se ratingene i et bestemt minutt.</li><li><b>Spillerrating:</b> Hver spiller får et tall for kampen ut fra hvor mye han bidro til lagets ratinger (egenskaper, form, rolle og ordre) som snitt over minuttene han var på banen. En spiller som byttes ut etter en flott første omgang beholder ratingen sin. 5 er typisk for rollen, 7 og over er en god kamp.</li><li><b>Flaks og uflaks:</b> Hver sjanse har en sannsynlighet for mål. Summen er forventede mål. Pilen viser hvilket lag som fikk mer ut av sjansene enn de fortjente.</li><li><b>Reprise:</b> Når du logger inn etter at en kamp er spilt, kan du velge å se den i reprise eller få resultatet direkte. Reprise finnes også under hver ferdigspilt kamp.</li><li><b>Draktnummer:</b> Under Spillere kan du gi spillerne nummer og sortere etter dem.</li><li><b>Mål fra åpent spill:</b> Om et angrep ender i mål avgjøres av lagets rating i angrepssonen (venstre, midten eller høyre) mot motstanderens forsvarsrating i samme sone, keeper inkludert. Spilleren som avslutter er bare den som får æren. Formasjonen påvirker målantallet: offensive oppsett som 3-4-3 og 3-5-2 gir flest mål, mens 5-4-1 og 5-3-2 gir få.</li><li><b>Straffer:</b> Fouler i feltet gir straffe. Den tas av dødballtakeren, og dødball teller mest for skytteren, mens scoring teller litt. Mot keeperen avgjør dødball og keeperskill.</li><li><b>Ving:</b> Settes en ving offensivt, bidrar han mer til sideangrep og litt mindre til midtbane og forsvar. Settes han mot midten, bidrar han litt mer til midtbanen, men mindre til sideforsvar og sideangrep.</li><li><b>Spiss:</b> Spissen kan spille normalt, mot siden eller defensivt. En defensiv spiss gir mer midtbane og mindre angrep.</li><li><b>Forsvar:</b> Spiller du med tre, fire eller fem forsvarsspillere, kan du velge om de spiller som midtstoppere eller backer. Maks tre midtstoppere og én back på hver side.</li></ul>
   <h3>Personlighet, erfaring og kaptein</h3><ul><li>Spillerne har temperament, lederegenskap og noen har en spillestil: Lagspiller, Individualist, Kjemper eller Fair spiller. Du ser det på spillerkortet.</li><li>Erfaring bygges opp ved at spillerne spiller kamper. Lederegenskap og erfaring avgjør hvor godt egnet en spiller er som kaptein.</li><li>En god kaptein løfter alle ratingene litt, og mest når laget ligger under. Spilles kapteinen av banen, tar den beste på banen over med litt mindre effekt.</li></ul>
   <h3>Kort og utestengelse</h3><ul><li>Temperamentsfulle spillere forårsaker lettere frispark og får oftere gult kort.</li><li>To gule kort i samme kamp gir rødt kort. Rødt kort er sjeldent, og laget må spille resten av kampen med ti mann.</li><li>Rødt kort gir én kamps utestengelse. Det samme gjelder tre gule kort i ulike kamper.</li></ul>
   <h3>Bytter</h3><ul><li>Hvert lag kan bytte inntil fem spillere i løpet av en kamp. Du planlegger dem i Oppstilling: velg minutt, betingelse (alltid, ved tap, ved ledelse eller ved uavgjort), hvem som går ut og inn, og eventuelt ny posisjon.</li><li>Eksempel: ved tap fra 60. minutt går en midtstopper ut og en ekstra spiss kommer inn. Ved ledelse kan du gjøre det motsatte.</li></ul>
@@ -2097,6 +2235,7 @@ function renameModal(i){
 
 /* ---------- tegning ---------- */
 function render(){
+  if(drag&&drag.on){ S.pendingRender=true; return; }
   const act=document.activeElement;
   if(act && act.matches && act.matches('#modal input, #view input[type=text], #view input[type=number]')){ S.pendingRender=true; return; }
   S.pendingRender=false;
@@ -2114,17 +2253,30 @@ let rq=null; function requestRender(){ if(rq) return; rq=requestAnimationFrame((
 
 /* ---------- handlinger ---------- */
 function fixOrders(lu){ const slots=E.slotsOf(lu); lu.o=slots.map((st,i)=>{ const o=(lu.o&&lu.o[i])||'normal'; return E.ordersFor(st).includes(o)?o:'normal'; }); }
-function saveLU(lu){ if(lineupLocked()){ toast('Kampene pågår. Oppstillingen er låst til alle kamper er ferdige.',true); requestRender(); return; } const t=myTeam(); fixOrders(lu); { const by=E.mapById(t.players); if(!lu.cap||!lu.sl.includes(lu.cap)) lu.cap=E.bestCaptainId(by,lu.sl); const n0=(lu.subs||[]).length; lu.subs=(lu.subs||[]).filter(x=>lu.sl.includes(x.out)&&by[x.inn]&&!lu.sl.includes(x.inn)); if(lu.subs.length<n0) toast('Noen planlagte bytter passet ikke lenger og er fjernet.'); } S.teams[S.me]={...t,lineup:lu}; requestRender(); return run(()=>S.store.saveLineup(S.me,lu)); }
+function saveLU(lu){
+  const per=perMatch();
+  if(!per && lineupLocked()){ toast('Kampene pågår. Standardoppstillingen er låst til alle kamper er ferdige. Velg en kommende kamp for å endre den.',true); requestRender(); return; }
+  const t=myTeam(); fixOrders(lu);
+  { const by=E.mapById(t.players); if(!lu.cap||!lu.sl.includes(lu.cap)) lu.cap=E.bestCaptainId(by,lu.sl); const n0=(lu.subs||[]).length; lu.subs=(lu.subs||[]).filter(x=>lu.sl.includes(x.out)&&by[x.inn]&&!lu.sl.includes(x.inn)); if(lu.subs.length<n0) toast('Noen planlagte bytter passet ikke lenger og er fjernet.'); }
+  if(per){ const r=S.lr; S.teams[S.me]={...t,lus:{...(t.lus||{}),[luKey(r)]:lu}}; requestRender(); return run(()=>S.store.saveRoundLineup(S.me,r,lu)); }
+  S.teams[S.me]={...t,lineup:lu}; requestRender(); return run(()=>S.store.saveLineup(S.me,lu));
+}
+function doAssign(i,id){
+  const t=myTeam(); { const q=t.players.find(x=>x.id===id); if(q&&isSus(q)){ toast(q.n+' er utestengt og kan ikke spille neste kamp.',true); return; } }
+  const lu=clone(curLU(t)); const j=lu.sl.indexOf(id); const old=lu.sl[i]; if(old===id) return;
+  lu.sl[i]=id; if(j>=0){ lu.sl[j]=old; lu.o[j]='normal'; } lu.o[i]='normal'; if(!lu.tk) lu.tk=E.bestTaker(t.players,lu.sl); saveLU(lu);
+}
+function doSwap(i,j){ const t=myTeam(); const lu=clone(curLU(t)); if(i===j) return; const a=lu.sl[i]; lu.sl[i]=lu.sl[j]; lu.sl[j]=a; lu.o[i]='normal'; lu.o[j]='normal'; saveLU(lu); }
 const actions={
   tab(el){ S.tab=el.dataset.k; try{ localStorage.setItem('lm-tab',S.tab); }catch(e){} render(); window.scrollTo(0,0); },
   selslot(el){ S.sel=+el.dataset.i; render(); },
-  assign(el){ const t=myTeam(); { const q=t.players.find(x=>x.id===el.dataset.id); if(q&&isSus(q)){ toast(q.n+' er utestengt og kan ikke spille neste kamp.',true); return; } } const lu=clone(t.lineup); const i=S.sel; const id=el.dataset.id; const j=lu.sl.indexOf(id); const old=lu.sl[i]; if(old===id) return; lu.sl[i]=id; if(j>=0){ lu.sl[j]=old; lu.o[j]='normal'; } lu.o[i]='normal'; if(!lu.tk) lu.tk=E.bestTaker(t.players,lu.sl); saveLU(lu); },
-  role(el){ const t=myTeam(); const lu=clone(t.lineup); const base=E.FORMATIONS[lu.f]; const ty=E.slotsOf(lu).slice(); ty[S.sel]=el.dataset.r; if(!E.validTy(base,ty)){ toast('Du kan ikke stille med mer enn tre midtstoppere og ikke mer enn én back på hver side.',true); return; } lu.ty=ty.every((x,i)=>x===base[i])?null:ty; lu.o[S.sel]='normal'; saveLU(lu); },
-  order(el){ const t=myTeam(); const lu=clone(t.lineup); lu.o[S.sel]=el.dataset.o; saveLU(lu); },
+  assign(el){ doAssign(S.sel,el.dataset.id); },
+  role(el){ const t=myTeam(); const lu=clone(curLU(t)); const base=E.FORMATIONS[lu.f]; const ty=E.slotsOf(lu).slice(); ty[S.sel]=el.dataset.r; if(!E.validTy(base,ty)){ toast('Du kan ikke stille med mer enn tre midtstoppere og ikke mer enn én back på hver side.',true); return; } lu.ty=ty.every((x,i)=>x===base[i])?null:ty; lu.o[S.sel]='normal'; saveLU(lu); },
+  order(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.o[S.sel]=el.dataset.o; saveLU(lu); },
   auto(){ const t=myTeam(); const c=clone(t); c.ai=null; const lu=E.autoLineup(c); saveLU(lu); toast('Oppstillingen er satt opp automatisk.'); },
   claim(el){ const t=S.teams[+el.dataset.i]; openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>Ta over ${esc(t.name)}</h3><p class="muted small" style="margin:4px 0 14px">Du kan gi klubben et nytt navn nå, eller beholde det gamle. Du kan også endre det senere.</p><div class="row"><label class="f">Klubbnavn<input type="text" id="claimName" maxlength="28" value="${esc(t.name)}"></label><button class="btn primary" data-act="doclaim" data-i="${t.i}" style="align-self:flex-end">Bli manager</button></div>`); setTimeout(()=>{ const i=$('#claimName'); if(i){ i.focus(); i.select(); } },0); },
   doclaim(el){ const v=$('#claimName').value; closeModal(); run(()=>S.store.claimTeam(+el.dataset.i,v),'Du er nå manager. Lykke til!').then(()=>{ S.tab='home'; }); },
-  subadd(){ const t=myTeam(); const lu=clone(t.lineup); lu.subs=lu.subs||[]; if(lu.subs.length>=5) return; const by=E.mapById(t.players); const usedOut=new Set(lu.subs.map(x=>x.out)), usedIn=new Set(lu.subs.map(x=>x.inn)); const slots=E.slotsOf(lu);
+  subadd(){ const t=myTeam(); const lu=clone(curLU(t)); lu.subs=lu.subs||[]; if(lu.subs.length>=5) return; const by=E.mapById(t.players); const usedOut=new Set(lu.subs.map(x=>x.out)), usedIn=new Set(lu.subs.map(x=>x.inn)); const slots=E.slotsOf(lu);
     let oi=-1,ov=1e9; lu.sl.forEach((id,i)=>{ const p=by[id]; if(!p||slots[i]==='GK'||usedOut.has(id)) return; const v=E.slotScore(p,slots[i]); if(v<ov){ov=v;oi=i;} });
     const bench=t.players.filter(p=>!lu.sl.includes(p.id)&&!isSus(p)&&!usedIn.has(p.id)); if(oi<0||!bench.length){ toast('Du trenger en ledig spiller på benken og en spiller å bytte ut.',true); return; }
     bench.sort((a,b)=>E.slotScore(b,slots[oi])-E.slotScore(a,slots[oi]));
@@ -2134,21 +2286,28 @@ const actions={
   rppause(){ if(!S.rp) return; S.rp.playing=!S.rp.playing; S.rp.last=Date.now(); refreshPanel(); },
   rpend(){ S.rp=null; render(); },
   seeresult(){ closeModal(); },
-  replaymodal(el){ closeModal(); const t=S.pend; if(!t) return; markSeen(t.doc); S.tab='games'; S.round=t.doc.r; S.watch={r:t.doc.r,h:t.m.h}; S.rp=null; if(el.dataset.v==='rp'){ S.rp={key:mkey(t.m,t.doc),el:0,speed:3,playing:true,last:Date.now()}; } S.scrub=null; render(); window.scrollTo(0,0); },
+  replaymodal(el){ closeModal(); const t=S.pend; if(!t) return; markSeen(t.doc); S.tab='games'; S.round=t.doc.r; S.watch={r:t.doc.r,h:t.m.h}; S.md={r:t.doc.r,h:t.m.h}; S.rp=null; if(el.dataset.v==='rp'){ S.rp={key:mkey(t.m,t.doc),el:0,speed:3,playing:true,last:Date.now()}; } S.scrub=null; render(); window.scrollTo(0,0); },
   later(){ if(S.pend) markSeen(S.pend.doc); closeModal(); },
   autonum(){ const t=myTeam(); if(!t) return; const old=S.sortKey; S.sortKey='pos'; const ord=sortPlayers(t.players); S.sortKey=old; const map={}; ord.forEach((p,i)=>map[p.id]=i+1); applyNumbers(map); },
   clearnum(){ const t=myTeam(); if(!t) return; const map={}; t.players.forEach(p=>map[p.id]=null); applyNumbers(map); },
+  lu2default(){ const t=myTeam(); if(!t||!perMatch()) return; if(lineupLocked()){ toast('Standardoppstillingen er låst mens kampene pågår.',true); return; } const lu=clone(curLU(t)); S.teams[S.me]={...t,lineup:lu}; requestRender(); run(()=>S.store.saveLineup(S.me,lu),'Oppstillingen er satt som standard.'); },
+  luclear(){ const t=myTeam(); if(!t||!perMatch()) return; const r=S.lr; const lus={...(t.lus||{})}; delete lus[luKey(r)]; S.teams[S.me]={...t,lus}; requestRender(); run(()=>S.store.saveRoundLineup(S.me,r,null),'Kampen bruker nå standardoppstillingen.'); },
+  cmpmode(el){ S.cmp=el.dataset.v; render(); },
+  editround(el){ S.lr=+el.dataset.r; S.tab='lineup'; try{ localStorage.setItem('lm-tab','lineup'); }catch(e){} render(); window.scrollTo(0,0); },
+  mdback(){ S.md=null; S.rp=null; render(); window.scrollTo(0,0); },
+  gmode(el){ S.gm=el.dataset.v; S.md=null; render(); },
+  rbmatch(el){ S.watch={r:+el.dataset.r,h:+el.dataset.h}; render(); },
   frchallenge(el){ run(()=>S.store.challenge(S.me,+el.dataset.i),'Utfordringen er sendt.'); },
   frapprove(el){ run(()=>S.store.approveFriendly(el.dataset.id,S.me),f=>f.ai?'Oppstillingen er godkjent. Kampen starter om 2 minutter.':(f.st==='ready'?'Begge har godkjent. Kampen starter!':'Oppstillingen er godkjent. Venter på motstanderen.')); },
   frcancel(el){ run(()=>S.store.cancelFriendly(el.dataset.id),'Treningskampen er avbrutt.'); },
   frview(el){ S.fwatch=(S.fwatch===el.dataset.id)?null:el.dataset.id; render(); },
-  subdel(el){ const t=myTeam(); const lu=clone(t.lineup); (lu.subs||[]).splice(+el.dataset.n,1); saveLU(lu); },
+  subdel(el){ const t=myTeam(); const lu=clone(curLU(t)); (lu.subs||[]).splice(+el.dataset.n,1); saveLU(lu); },
   release(el){ openModal(`<h3>Gi fra deg laget?</h3><p>Datamaskinen tar over ${esc(S.teams[+el.dataset.i].name)} og du står uten lag.</p><div class="row"><button class="btn danger" data-act="dorelease" data-i="${el.dataset.i}">Ja, gi fra meg</button><button class="btn" data-act="closemodal">Avbryt</button></div>`); },
   dorelease(el){ closeModal(); run(()=>S.store.releaseTeam(+el.dataset.i),'Laget er gitt tilbake til datamaskinen.'); },
   rename(el){ renameModal(+el.dataset.i); },
   dorename(el){ const v=$('#newName').value; closeModal(); run(()=>S.store.renameTeam(+el.dataset.i,v),'Klubbnavnet er endret.'); },
   player(el){ playerModal(el.dataset.id); },
-  match(el){ S.tab='games'; S.round=+el.dataset.r; S.watch={r:+el.dataset.r,h:+el.dataset.h}; render(); window.scrollTo(0,0); },
+  match(el){ const r=+el.dataset.r, h=+el.dataset.h; S.tab='games'; S.round=r; S.watch={r,h}; S.md={r,h}; S.rp=null; S.scrub=null; render(); window.scrollTo(0,0); },
   closemodal(){ closeModal(); if(S.pendingRender) render(); },
   closeov(el,ev){ if(ev.target===el) closeModal(); },
   rnd(el){ S.round=Math.max(0,Math.min(E.ROUNDS-1,(S.round==null?0:S.round)+(+el.dataset.d))); render(); },
@@ -2159,17 +2318,57 @@ const actions={
   quicksell(el){ closeModal(); run(()=>S.store.quickSell(S.me,el.dataset.id),p=>'Spilleren er solgt for '+kr(p)+'.'); }
 };
 const changes={
-  formation(el){ const t=myTeam(); const lu=clone(t.lineup); const by=E.mapById(t.players); const xi=lu.sl.map(id=>by[id]).filter(Boolean); lu.f=el.value; lu.ty=null; lu.sl=E.assignFormation(xi,el.value); lu.o=lu.sl.map(()=> 'normal'); lu.tk=E.bestTaker(t.players,lu.sl); S.sel=Math.min(S.sel,10); saveLU(lu); },
-  cap(el){ const t=myTeam(); const lu=clone(t.lineup); lu.cap=el.value; saveLU(lu); },
-  subf(el){ const t=myTeam(); const lu=clone(t.lineup); const x=(lu.subs||[])[+el.dataset.n]; if(!x) return; const f=el.dataset.f; x[f]= f==='m'?+el.value : f==='as'?(el.value||null) : el.value; if(x.out===x.inn){ toast('Spilleren som går ut og inn må være ulike.',true); render(); return; } saveLU(lu); },
-  taker(el){ const t=myTeam(); const lu=clone(t.lineup); lu.tk=el.value; saveLU(lu); },
+  formation(el){ const t=myTeam(); const lu=clone(curLU(t)); const by=E.mapById(t.players); const xi=lu.sl.map(id=>by[id]).filter(Boolean); lu.f=el.value; lu.ty=null; lu.sl=E.assignFormation(xi,el.value); lu.o=lu.sl.map(()=> 'normal'); lu.tk=E.bestTaker(t.players,lu.sl); S.sel=Math.min(S.sel,10); saveLU(lu); },
+  cap(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.cap=el.value; saveLU(lu); },
+  subf(el){ const t=myTeam(); const lu=clone(curLU(t)); const x=(lu.subs||[])[+el.dataset.n]; if(!x) return; const f=el.dataset.f; x[f]= f==='m'?+el.value : f==='as'?(el.value||null) : el.value; if(x.out===x.inn){ toast('Spilleren som går ut og inn må være ulike.',true); render(); return; } saveLU(lu); },
+  taker(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.tk=el.value; saveLU(lu); },
   sort(el){ S.sortKey=el.value; render(); },
+  lsort(el){ S.lsort=el.value; render(); },
+  lround(el){ S.lr=el.value===''?null:+el.value; S.sel=0; render(); },
   pno(el){ const t=myTeam(); if(!t) return; const id=el.dataset.id; const raw=el.value.trim(); const v=raw===''?null:Number(raw); if(v!==null && (!Number.isInteger(v)||v<1||v>99)){ toast('Draktnummer må være et tall fra 1 til 99.',true); { const q=t.players.find(p=>p.id===id); el.value=q&&q.no!=null?q.no:''; } return; } if(v!==null && t.players.some(p=>p.id!==id&&p.no===v)){ toast('Nummer '+v+' er allerede i bruk på laget.',true); { const q=t.players.find(p=>p.id===id); el.value=q&&q.no!=null?q.no:''; } return; } applyNumbers({[id]:v}); },
   trainA(el){ const t=myTeam(); const tr={a:el.value||null,b:(t.training&&t.training.b)||null}; if(tr.b===tr.a) tr.b=null; S.teams[S.me]={...t,training:tr}; requestRender(); run(()=>S.store.saveTraining(S.me,tr),'Treningen er lagret.'); },
   trainB(el){ const t=myTeam(); const tr={a:(t.training&&t.training.a)||null,b:el.value||null}; if(tr.b&&tr.b===tr.a){ toast('Velg en annen egenskap enn hovedtreningen.',true); render(); return; } S.teams[S.me]={...t,training:tr}; requestRender(); run(()=>S.store.saveTraining(S.me,tr),'Treningen er lagret.'); },
   mfpos(el){ S.mf.pos=el.value; render(); }, mfage(el){ S.mf.maxAge=+el.value; render(); }, mfsort(el){ S.mf.sort=el.value; render(); }
 };
-document.addEventListener('click',ev=>{ if(ev.target.closest('input,select')) return; const el=ev.target.closest('[data-act]'); if(!el) return; const f=actions[el.dataset.act]; if(f){ ev.preventDefault(); f(el,ev); } });
+document.addEventListener('click',ev=>{ if(S.noClick&&Date.now()-S.noClick<500){ S.noClick=0; ev.preventDefault(); return; } if(ev.target.closest('input,select')) return; const el=ev.target.closest('[data-act]'); if(!el) return; const f=actions[el.dataset.act]; if(f){ ev.preventDefault(); f(el,ev); } });
+
+/* ---------- dra og slipp (mus og berøring) ---------- */
+function dropTarget(x,y){ const el=document.elementFromPoint(x,y); return el?el.closest('[data-drop]'):null; }
+document.addEventListener('pointerdown',ev=>{
+  const el=ev.target.closest('[data-drag]'); if(!el||(ev.pointerType==='mouse'&&ev.button!==0)) return;
+  if(ev.pointerType!=='mouse'&&el.dataset.drag==='player'&&!ev.target.closest('.grip')) return;
+  if(ev.target.closest('input,select')) return;
+  drag={el,kind:el.dataset.drag,id:el.dataset.id||null,slot:el.dataset.i!=null?+el.dataset.i:null,x:ev.clientX,y:ev.clientY,on:false,ghost:null,over:null};
+});
+document.addEventListener('pointermove',ev=>{
+  if(!drag) return;
+  if(!drag.on){ if(Math.hypot(ev.clientX-drag.x,ev.clientY-drag.y)<8) return;
+    drag.on=true; document.body.classList.add('dragging');
+    const g=document.createElement('div'); g.className='dragghost'; const nm=drag.el.querySelector('.pname,.nm'); g.textContent=nm?nm.textContent.trim():'Spiller'; document.body.appendChild(g); drag.ghost=g; }
+  ev.preventDefault(); drag.cx=ev.clientX; drag.cy=ev.clientY;
+  drag.ghost.style.transform=`translate(${ev.clientX+12}px,${ev.clientY+12}px)`;
+  const tg=dropTarget(ev.clientX,ev.clientY); if(drag.over&&drag.over!==tg) drag.over.classList.remove('over');
+  if(tg&&tg!==drag.el&&(tg.dataset.drop==='slot'||drag.kind==='slot')){ tg.classList.add('over'); drag.over=tg; } else drag.over=null;
+},{passive:false});
+setInterval(()=>{ if(drag&&drag.on){ const y=drag.cy; if(y<70) window.scrollBy(0,-16); else if(y>innerHeight-70) window.scrollBy(0,16); } },30);
+function endDrag(ev,drop){
+  const d=drag; if(!d) return; drag=null;
+  if(!d.on) return;
+  document.body.classList.remove('dragging'); if(d.ghost) d.ghost.remove(); if(d.over) d.over.classList.remove('over');
+  S.noClick=Date.now();
+  if(drop){
+    const tg=dropTarget(ev.clientX,ev.clientY);
+    if(tg&&tg!==d.el){
+      if(luLocked()){ toast('Oppstillingen er låst mens kampene pågår.',true); }
+      else if(d.kind==='player'&&tg.dataset.drop==='slot'){ S.sel=+tg.dataset.i; doAssign(S.sel,d.id); }
+      else if(d.kind==='slot'&&tg.dataset.drop==='slot'){ S.sel=+tg.dataset.i; doSwap(d.slot,+tg.dataset.i); }
+      else if(d.kind==='slot'&&tg.dataset.drop==='player'){ S.sel=d.slot; doAssign(d.slot,tg.dataset.id); }
+    }
+  }
+  if(S.pendingRender) setTimeout(render,0);
+}
+document.addEventListener('pointerup',ev=>endDrag(ev,true));
+document.addEventListener('pointercancel',ev=>endDrag(ev,false));
 document.addEventListener('input',ev=>{ const el=ev.target.closest('[data-input]'); if(!el) return; if(el.dataset.input==='scrub'){ const a=S.mpArgs; if(!a) return; const [doc,m]=a; S.scrub={key:mkey(m,doc),el:+el.value}; const d=$('#duels'); if(d) d.innerHTML=duelsInner(m,S.teams[m.h],S.teams[m.a],S.scrub.el); const lb=$('#scrublab'); if(lb) lb.textContent=minLabel(m,S.scrub.el); } });
 document.addEventListener('change',ev=>{ const el=ev.target.closest('[data-change]'); if(!el) return; const f=changes[el.dataset.change]; if(f) f(el); });
 document.addEventListener('focusout',()=>{ setTimeout(()=>{ if(S.pendingRender) render(); },50); });
@@ -2216,7 +2415,7 @@ function liveTick(){
       S.seen[key]=lv.vis.length;
     }
   });
-  const sig=items.map(({m,doc:d})=>{ const lv=liveOf(m,d,true); return lv.st+lv.vis.length+(S.watch&&S.watch.h===m.h?lv.label:''); }).join('|')+'|'+(fd?fd.st+fd.id:'')+(myTeam()?'':'x');
+  const sig=items.map(({m,doc:d})=>{ const lv=liveOf(m,d,true); return lv.st+lv.vis.length+((S.watch&&S.watch.h===m.h)||(S.md&&S.md.h===m.h)?lv.label:''); }).join('|')+'|'+(fd?fd.st+fd.id:'')+(myTeam()?'':'x');
   if(sig!==S.liveSig){ S.liveSig=sig; if(['home','games','lineup','friendly'].includes(S.tab)) requestRender(); else { $('#top').innerHTML=topbar(); $('#tabs').innerHTML=tabsBar(); } }
 }
 function refreshPanel(){ const a=S.mpArgs; const d=$('#mp'); if(!a||!d) return; d.outerHTML=matchPanel(a[0],a[1]); }
