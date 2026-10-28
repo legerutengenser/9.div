@@ -1935,6 +1935,7 @@ function sortPlayers(list){
   if(E.SKI[k]!=null) return list.slice().sort((a,b)=>b.s[E.SKI[k]]-a.s[E.SKI[k]]);
   return list.slice().sort(f[k]||f.pos);
 }
+function sortTh(kind,k,label,cls,tip){ const cur=kind==='market'?S.mf.sort:S.sortKey; const act=kind==='market'?'msort':'ssort'; return `<th class="${cls} sortable${cur===k?' hl':''}" data-act="${act}" data-k="${k}" title="${tip}">${label}${cur===k?' ▲':''}</th>`; }
 function skHead(kind){ const cur=kind==='market'?S.mf.sort:S.sortKey; const act=kind==='market'?'msort':'ssort'; return E.SK.map(k=>`<th class="c sortable${cur===k?' hl':''}" data-act="${act}" data-k="${k}" title="Sorter etter ${E.SK_NAME[k]}, høyest først">${E.SK_SHORT[k]}${cur===k?' ▼':''}</th>`).join(''); }
 function viewSquad(){
   const t=myTeam(); if(!t) return needTeam();
@@ -1943,7 +1944,7 @@ function viewSquad(){
   const wages=t.players.reduce((s,p)=>s+E.wage(p),0);
   return `<div class="sectionhead"><h2>Spillere</h2><span class="muted small">${t.players.length} spillere · lønn ${kr(wages)} i uka</span></div>
   <div class="row" style="margin-bottom:12px"><label class="f">Sorter etter<select id="sortkey" data-change="sort">${sorts.map(([k,n])=>`<option value="${k}"${S.sortKey===k?' selected':''}>${n}</option>`).join('')}</select></label><button class="btn sm" data-act="autonum" title="Gir keeper nr 1, deretter forsvar, midtbane og angrep">Nummerer automatisk</button><button class="btn sm" data-act="clearnum">Fjern alle numre</button></div>
-  <div class="tablewrap vscroll"><table><thead><tr><th class="c" title="Draktnummer">Nr</th><th>Spiller</th><th class="c">Alder</th><th>Posisjon</th>${skHead('squad')}<th class="c">Form</th><th class="r">Verdi</th></tr></thead><tbody>
+  <div class="tablewrap vscroll"><table><thead><tr><th class="c" title="Draktnummer">Nr</th><th>Spiller</th>${sortTh('squad','age','Alder','c','Sorter etter alder, yngst først')}${sortTh('squad','pos','Posisjon','','Sorter etter posisjon')}${skHead('squad')}<th class="c">Form</th><th class="r">Verdi</th></tr></thead><tbody>
   ${list.map(p=>`<tr class="click" data-act="player" data-id="${p.id}"><td class="c"><input type="number" class="noin" min="1" max="99" inputmode="numeric" aria-label="Draktnummer for ${esc(p.n)}" value="${p.no==null?'':p.no}" data-change="pno" data-id="${p.id}"></td><td><span class="pname">${esc(p.n)}</span>${specBadge(p)}${p.lst?' <span class="tag sale">Til salgs</span>':''}${inXI.has(p.id)?'':' <span class="tag">Benk</span>'}${t.lineup&&t.lineup.cap===p.id?' <span class="tag cap" title="Kaptein">Kaptein</span>':''}${traitBadges(p)}</td><td class="c num" style="white-space:nowrap">${ageStr(p)}</td><td>${roleOf(p)}</td>${E.SK.map(k=>`<td class="c">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td><td class="r num">${kr(E.value(p))}</td></tr>`).join('')}</tbody></table></div>
   <p class="tiny muted">Trykk på en spiller for detaljer, salg og spesialitet. Alder 17 og eldre kan spille på A-laget. Etter fylte 30 år faller egenskapene gradvis.</p>`;
 }
@@ -1985,7 +1986,7 @@ function viewMarket(){
   const filt=`<div class="row" style="margin-bottom:12px"><label class="f">Posisjon<select id="mfpos" data-change="mfpos"><option value="">Alle</option>${E.ROLES.map(r=>`<option value="${r}"${f.pos===r?' selected':''}>${E.ROLE_NAME[r]}</option>`).join('')}</select></label>
   <label class="f">Maks alder<select id="mfage" data-change="mfage">${[40,34,30,26,23,20].map(a=>`<option value="${a}"${f.maxAge===a?' selected':''}>${a===40?'Alle':a+' år'}</option>`).join('')}</select></label>
   <label class="f">Sorter<select id="mfsort" data-change="mfsort"><option value="price"${f.sort==='price'?' selected':''}>Pris</option><option value="ab"${f.sort==='ab'?' selected':''}>Evne</option><option value="age"${f.sort==='age'?' selected':''}>Alder</option>${E.SK.map(k=>`<option value="${k}"${f.sort===k?' selected':''}>${E.SK_NAME[k]} (høyest først)</option>`).join('')}</select></label></div>`;
-  const head=`<thead><tr><th>Spiller</th><th class="c">Alder</th>${skHead('market')}<th class="r">Pris</th><th></th></tr></thead>`;
+  const head=`<thead><tr><th>Spiller</th>${sortTh('market','age','Alder','c','Sorter etter alder, yngst først')}${skHead('market')}<th class="r">Pris</th><th></th></tr></thead>`;
   return `<div class="sectionhead"><h2>Marked</h2><span class="muted small">Kasse ${kr(t.money)} · Nye spillere hver tirsdag og fortløpende, annonser varer i to uker. Trykk på en spiller for å se alle egenskapene</span></div>${filt}
   <div class="tablewrap vscroll">${items.length?`<table>${head}<tbody>${marketRows(items)}</tbody></table>`:`<div class="empty">Ingen spillere passer filteret.</div>`}</div>
   ${mine.length?`<div class="sectionhead" style="margin-top:24px"><h2>Dine spillere til salgs</h2></div><div class="tablewrap vscroll"><table>${head}<tbody>${marketRows(mine)}</tbody></table></div>`:''}
