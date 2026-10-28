@@ -198,6 +198,7 @@ function genSquad(r, T, names){
   return players;
 }
 function genYouth(r, names){ const role=pick(r,ROLES); return genPlayer(r, role, clamp(4.5+normal(r)*1.5,1,9), 17, names); }
+function genMarketTalent(r, names){ const role=pick(r,ROLES); const age=ri(r,17,20); const ab=clamp(6.0+normal(r)*2.2,2.5,14); return genPlayer(r, role, ab, age, names); }
 function genMarketPlayer(r, names){ const role=pick(r,ROLES); const age=ri(r,18,33); const ab=clamp(8.2+normal(r)*2.6+ageOffset(age)*.5,1.5,17.5); return genPlayer(r, role, ab, age, names); }
 
 /* ---------- lag ---------- */
@@ -328,7 +329,7 @@ function cost(level){ return 0.55*Math.pow(1.16, level); }
 function ageTrainF(a){ return a<=17?2.2: a===18?2.05: a===19?1.85: a===20?1.65: a===21?1.45: a===22?1.28: a===23?1.12: a<=26?1: a===27?.96: a===28?.92: a===29?.88: a===30?.82: a<=32?.70: .55; }
 function lineupRoles(team){ const m={}; const slots=slotsOf(team.lineup); team.lineup.sl.forEach((id,i)=>{ if(id) m[id]=SLOT_ROLE[slots[i]]; }); return m; }
 function trainShare(team){ const tr=team.training||{}; const ks=[tr.a,tr.b].filter(Boolean); return {ks, share: ks.length===2?0.6:1}; }
-const TRAIN_SCALE = 0.3;
+const TRAIN_SCALE = 0.48;   // per uke; trenes i tre like deler, en etter hver kamp
 function trainingRate(p, k, role, inLine, share){ return TRAIN_SCALE*REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
 function trainTeam(team, r, week){
   const {ks,share}=trainShare(team); if(!ks.length) return;
@@ -338,7 +339,7 @@ function trainTeam(team, r, week){
     const inLine=!!roles[p.id]; const role=roles[p.id]||bestRole(p);
     for(const k of ks){
       const i=SKI[k]; if(p.s[i]>=20) continue;
-      p.pr[i] += trainingRate(p,k,role,inLine,share)*(0.85+r()*0.3);
+      p.pr[i] += trainingRate(p,k,role,inLine,share)/3*(0.85+r()*0.3);
       let up=0;
       while(p.s[i]<20 && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
       if(p.s[i]>=20) p.pr[i]=0;
@@ -536,7 +537,8 @@ function simulateMatch(Ht, At, r){
   const rs=[]; const pacc={};
   /* spillerens bidrag til lagets ratinger (ferdighet x koeffisient x form x spesialitet, normalisert som lagratingene) */
   const contribOf=(p,st,o)=>{ const f=formMult(p); let v=0; for(const c of orderedContribs(st,o||'normal')) v+=p.s[c[1]]*c[2]*f*specMult(p,c[3])/NORM[c[0]]; return v; };
-  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0],i,s:rs.length<=1?1:0}); a.m+=w; a.c+=w*contribOf(p,st,side.o[i]); a.st=st; }); };
+  const trackPlayers=(side,w)=>{ side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(!p) return; const a=pacc[p.id]||(pacc[p.id]={n:p.n,m:0,c:0,st,h:side===sides[0],i,s:rs.length<=1?1:0,si:rs.length-1,w:[]});
+    const cw=contribOf(p,st,side.o[i]); a.w.push(Math.round(clamp(5*cw/(RATE_REF[st]||5),0,10)*10)); a.m+=w; a.c+=w*cw; a.st=st; }); };
 
   function attackOnce(X, Y, side, x, R){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
@@ -712,7 +714,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s,a.si,a.w]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
@@ -803,13 +805,16 @@ function refreshMarket(market, teams, r, week, names){
     }
   }
   market.items=keep;
-  const n=ri(r,18,22);
+  addMarketPlayers(market,r,week,names,ri(r,34,42));
+  if(market.items.length>130) market.items=market.items.slice(-130);
+}
+/* nye spillere på markedet: omtrent 40 % unge talenter (17–20 år), resten 18–33 år */
+function addMarketPlayers(market, r, week, names, n){
   for(let k=0;k<n;k++){
-    const p=genMarketPlayer(r,names);
+    const p=r()<0.4?genMarketTalent(r,names):genMarketPlayer(r,names);
     const price=Math.round(value(p)*(1.05+r()*0.25)/1000)*1000;
     market.items.push({id:p.id, price, from:-1, exp:week+2, pl:p});
   }
-  if(market.items.length>70) market.items=market.items.slice(-70);
 }
 
 /* ---------- sesongskifte ---------- */
@@ -849,13 +854,14 @@ function simulateRound(league, teams, market, names){
   if(g%3===0){
     for(const t of teams){
       if(!t.owner) aiPlan(t,r0,week);
-      trainTeam(t,r0,week); agingDecline(t,r0,week); formDrift(t,r0); weeklyFinance(t);
+      agingDecline(t,r0,week); formDrift(t,r0); weeklyFinance(t);
       out.changed.add(t.i);
     }
     refreshMarket(market, teams, r0, week, names);
     league.wk=week;
     out.marketChanged=true;
   }
+  if(market.items.length<90){ addMarketPlayers(market,r0,week,names,Math.min(14,90-market.items.length)); out.marketChanged=true; }
   const rd=league.r; const kick=slotTime(league.anchor,g);
   const doc={s:league.s, r:rd, g, t:kick, live:true, m:[]};
   for(const [h,a] of league.fx[rd]){
@@ -894,6 +900,7 @@ function finishRound(league, teams, doc, names){
     for(const e of res.ev){ if(!GOAL_KINDS[e.k]) continue; const T=(e.s==='h')?Ht:At; const pl=T.players.find(p=>p.id===e.i); if(pl) pl.gl=(pl.gl||0)+1; }
     out.changed.add(res.h); out.changed.add(res.a);
   }
+  { const wk=Math.floor(doc.g/3); for(const t of teams){ trainTeam(t,r0,wk); out.changed.add(t.i); } }
   doc.live=false;
   league.g++; league.r++; league.ph=0;
   setClock(rnOf(league)); ensureAges(teams, rnOf(league)).forEach(i=>out.changed.add(i));
