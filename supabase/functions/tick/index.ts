@@ -446,11 +446,11 @@ const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
 const SUB_COND = {always:'Alltid', trail:'Ved tap', draw:'Ved uavgjort', nolead:'Hvis ikke i ledelse', lead:'Ved ledelse'};
 /* taktikker: multiplikator per sektor [LD,CD,RD,MD,LA,CA,RA] */
 const TAC = {
-  normal:{n:'Normal', m:[1,1,1,1,1,1,1], d:'Ingen spesiell taktikk.'},
-  counter:{n:'Kontringer', m:[1,1,1,.93,1.08,1.08,1.08], d:'Laget trekker seg tilbake og slår raskt. Angrepet blir noe sterkere, men midtbanen svekkes.'},
-  mid:{n:'Angrep i midten', m:[.95,1,.95,1,1,1.16,1], d:'Angrepet samles i midten og blir sterkere der, men vingforsvaret blir dårligere.'},
-  wings:{n:'Angrep på sidene', m:[1,.95,1,1,1.07,1,1.07], d:'Angrepet legges ut på kantene og blir sterkere der, men midtforsvaret blir litt dårligere.'},
-  poss:{n:'Ekstra ballfordeling', m:[1,1,1,1.08,.95,.95,.95], d:'Laget holder ballen og styrer midtbanen, men angrepet svekkes noe.'}
+  normal:{n:'Normal', m:[1,1,1,1,1,1,1], b:[1,1,1], d:'Ingen spesiell taktikk.'},
+  counter:{n:'Kontringer', m:[1.07,1.07,1.07,.93,1.03,1.03,1.03], b:[1,1,1], d:'Laget står kompakt og slår raskt. Forsvaret blir sterkere og angrepet litt sterkere, men midtbanen svekkes.'},
+  mid:{n:'Angrep i midten', m:[.98,1,.98,1,1,1,1], b:[.8,1.8,.8], d:'Flere av lagets angrep går gjennom midten. Sektorratingene i angrep økes ikke, og vingforsvaret blir litt dårligere.'},
+  wings:{n:'Angrep på sidene', m:[1,.95,1,1,1,1,1], b:[1.2,.7,1.2], d:'Flere av lagets angrep går ut på kantene. Sektorratingene i angrep økes ikke, og midtforsvaret blir litt dårligere.'},
+  poss:{n:'Ekstra ballfordeling', m:[1,1,1,1.08,.95,.95,.95], b:[1,1,1], d:'Laget holder ballen og styrer midtbanen, men angrepet svekkes noe.'}
 };
 const condOk=(c,d)=> c==='trail'?d<0 : c==='lead'?d>0 : c==='draw'?d===0 : c==='nolead'?d<=0 : true;
 function fm(p){ return formMult(p); }
@@ -554,7 +554,7 @@ function simulateMatch(Ht, At, r){
 
   function attackOnce(X, Y, side, x, R){
     const secW=[X.rat[4],X.rat[5],X.rat[6]];
-    const s=wpick(r,[0,1,2],i=>secW[i]*secW[i]);
+    const tb=(TAC[X.side.tac]||TAC.normal).b; const s=wpick(r,[0,1,2],i=>secW[i]*secW[i]*tb[i]);
     const att=X.rat[4+s], def=Y.rat[mirror[s]];
     const Rr=0.5+(Math.pow(att,1.6)/(Math.pow(att,1.6)+Math.pow(def,1.6))-0.5)*RD_;
     const pShot=Math.min(0.75, 0.5*Math.pow(Rr,1.2));
@@ -687,7 +687,9 @@ function simulateMatch(Ht, At, r){
       if(ch.done||gm(x)<ch.m) continue; if(!condOk(ch.c||'always',d)) continue; ch.done=true;
       if(ch.k==='tac' && TAC[ch.v] && side.tac!==ch.v){ side.tac=ch.v; push(x,{k:'sub', s:code, p:'', tx:`Taktikkendring for ${side.team.name}: spiller nå ${TAC[ch.v].n.toLowerCase()}.`}); }
       else if(ch.k==='form' && FORMATIONS[ch.v] && side.f!==ch.v){
-        const field=side.sl.map(id=>side.by[id]).filter(Boolean); const sl=assignFormation(field,ch.v);
+        const field=side.sl.map(id=>side.by[id]).filter(Boolean); const fs=FORMATIONS[ch.v]; const sl=new Array(11).fill(null); const used=new Set();
+        (ch.a||[]).forEach((id,i)=>{ if(id && i<11 && !used.has(id) && field.some(p=>p.id===id)){ sl[i]=id; used.add(id); } });
+        fs.map((st,i)=>i).sort((a2,b2)=>SLOT_ORDER[fs[a2]]-SLOT_ORDER[fs[b2]]).forEach(i=>{ if(sl[i]) return; let best=null,bv=-1; for(const p of field){ if(used.has(p.id)) continue; const v=slotScore(p,fs[i]); if(v>bv){bv=v;best=p;} } if(best){ sl[i]=best.id; used.add(best.id); } });
         side.f=ch.v; side.types=FORMATIONS[ch.v].slice(); side.sl=sl; side.o=sl.map(()=> 'normal');
         push(x,{k:'sub', s:code, p:'', tx:`Formasjonsendring for ${side.team.name}: laget går over til ${ch.v}.`});
       }
