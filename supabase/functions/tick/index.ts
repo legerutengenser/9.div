@@ -311,6 +311,8 @@ function ensureLineup(team){
   if(!lu.cap || !ids.has(lu.cap)){ lu.cap=bestCaptainId(mapById(team.players),lu.sl); changed=true; }
   const subs=Array.isArray(lu.subs)?lu.subs:[]; const okSubs=subs.filter(x=>x&&ids.has(x.out)&&ids.has(x.inn)&&x.out!==x.inn).slice(0,5);
   if(!Array.isArray(lu.subs) || okSubs.length!==subs.length){ lu.subs=okSubs; changed=true; }
+  if(lu.tac && !TAC[lu.tac]){ lu.tac='normal'; changed=true; }
+  if(lu.chg!=null){ const ch=Array.isArray(lu.chg)?lu.chg:[]; const okc=ch.filter(x=>x&&((x.k==='tac'&&TAC[x.v])||(x.k==='form'&&FORMATIONS[x.v]))).slice(0,4); if(!Array.isArray(lu.chg)||okc.length!==ch.length){ lu.chg=okc; changed=true; } }
   return changed;
 }
 function teamStrength(team){ ensureLineup(team); return lineupQuality(calcRatings(team.players, team.lineup)); }
@@ -441,7 +443,16 @@ const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, 
 const RATE_REF = {GK:6.7, DL:5.5, DR:5.5, DC:3.2, MC:5.0, WL:6.2, WR:6.2, AL:6.6, AR:6.6, FC:4.8};
 const PG0 = 0.31, PGK = 1.0, RD_ = 0.5;
 const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
-const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
+const SUB_COND = {always:'Alltid', trail:'Ved tap', draw:'Ved uavgjort', nolead:'Hvis ikke i ledelse', lead:'Ved ledelse'};
+/* taktikker: multiplikator per sektor [LD,CD,RD,MD,LA,CA,RA] */
+const TAC = {
+  normal:{n:'Normal', m:[1,1,1,1,1,1,1], d:'Ingen spesiell taktikk.'},
+  counter:{n:'Kontringer', m:[1,1,1,.93,1.08,1.08,1.08], d:'Laget trekker seg tilbake og slår raskt. Angrepet blir noe sterkere, men midtbanen svekkes.'},
+  mid:{n:'Angrep i midten', m:[.95,1,.95,1,1,1.16,1], d:'Angrepet samles i midten og blir sterkere der, men vingforsvaret blir dårligere.'},
+  wings:{n:'Angrep på sidene', m:[1,.95,1,1,1.07,1,1.07], d:'Angrepet legges ut på kantene og blir sterkere der, men midtforsvaret blir litt dårligere.'},
+  poss:{n:'Ekstra ballfordeling', m:[1,1,1,1.08,.95,.95,.95], d:'Laget holder ballen og styrer midtbanen, men angrepet svekkes noe.'}
+};
+const condOk=(c,d)=> c==='trail'?d<0 : c==='lead'?d>0 : c==='draw'?d===0 : c==='nolead'?d<=0 : true;
 function fm(p){ return formMult(p); }
 function calcRatingsSl(by, types, sl, o){
   const r=[0,0,0,0,0,0,0];
@@ -455,7 +466,7 @@ function mkSide(team, home, r){
   const {lu,by,sus}=effLineup(team);
   return {team, by, types:slotsOf(lu).slice(), sl:lu.sl.slice(), o:lu.o.slice(), f:lu.f, home,
     mult:home?1.06:1, noise:[0,0,0,0,0,0,0].map(()=>1+normal(r)*0.035),
-    capId:lu.cap, tkId:lu.tk, subs:(lu.subs||[]).slice(0,5).map(s=>({...s,done:false})), subsLeft:5,
+    tac:lu.tac||'normal', tac0:lu.tac||'normal', f0:lu.f, chg:(lu.chg||[]).slice(0,4).map(c=>({...c,done:false})), capId:lu.cap, tkId:lu.tk, subs:(lu.subs||[]).slice(0,5).map(s=>({...s,done:false})), subsLeft:5,
     yel:{}, played:new Set(lu.sl.filter(Boolean)), sus, capTalk:false, ratSum:0};
 }
 function onField(side){ const o=[]; side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(p) o.push({st, p, ord:(side.o&&side.o[i])||'normal', i}); }); return o; }
@@ -467,7 +478,8 @@ function capInfo(side){
 function sideRat(side, deficit){
   const rat=calcRatingsSl(side.by, side.types, side.sl, side.o);
   const ci=capInfo(side); const cf=1+ci.q*(0.02+(deficit>=2?0.045:deficit===1?0.03:0));
-  return rat.map((v,k)=>v*side.mult*side.noise[k]*cf);
+  const tm=(TAC[side.tac]||TAC.normal).m;
+  return rat.map((v,k)=>v*side.mult*side.noise[k]*cf*tm[k]);
 }
 function mkCtx(side, rat){
   const xi=onField(side); const gk=xi.find(x=>x.st==='GK');
@@ -655,7 +667,7 @@ function simulateMatch(Ht, At, r){
       if(sb.done || side.subsLeft<=0) continue;
       if(gm(x)<sb.m) continue;
       const c=sb.c||'always';
-      if(c==='trail' && deficit<=0) continue; if(c==='lead' && deficit>=0) continue; if(c==='draw' && deficit!==0) continue;
+      if(!condOk(c,deficit)) continue;
       const i=side.sl.indexOf(sb.out); const inn=side.by[sb.inn];
       if(i<0 || !inn || side.played.has(sb.inn) || side.sus.has(sb.inn)){ if(i<0||!inn||side.played.has(sb.inn)||side.sus.has(sb.inn)) sb.done=true; continue; }
       sb.done=true; side.subsLeft--;
@@ -665,14 +677,26 @@ function simulateMatch(Ht, At, r){
       if(sb.as && sb.as!==side.types[i] && SUB_SLOTS.includes(sb.as) && side.types[i]!=='GK'){ side.types[i]=sb.as; moved=` ${inn.n} spiller nå som ${SLOT_NAME[sb.as].toLowerCase()}.`; }
       if(!ordersFor(side.types[i]).includes(side.o[i])) side.o[i]='normal'; else side.o[i]='normal';
       if(side.capId===sb.out) { /* kapteinsbind overtas av beste på banen via capInfo */ }
-      const why=c==='trail'?' Treneren satser offensivt.':c==='lead'?' Treneren sikrer ledelsen.':'';
+      const why=c==='trail'||c==='nolead'?' Treneren satser offensivt.':c==='lead'?' Treneren sikrer ledelsen.':'';
       push(x,{k:'sub', s:sideCode, p:inn.n, i:inn.id, tx:`Bytte for ${side.team.name}: ${inn.n} kommer inn for ${outP?outP.n:'en spiller'}.${moved}${why}`});
     }
   }
 
+  function doChanges(side,x,d,code){
+    for(const ch of side.chg){
+      if(ch.done||gm(x)<ch.m) continue; if(!condOk(ch.c||'always',d)) continue; ch.done=true;
+      if(ch.k==='tac' && TAC[ch.v] && side.tac!==ch.v){ side.tac=ch.v; push(x,{k:'sub', s:code, p:'', tx:`Taktikkendring for ${side.team.name}: spiller nå ${TAC[ch.v].n.toLowerCase()}.`}); }
+      else if(ch.k==='form' && FORMATIONS[ch.v] && side.f!==ch.v){
+        const field=side.sl.map(id=>side.by[id]).filter(Boolean); const sl=assignFormation(field,ch.v);
+        side.f=ch.v; side.types=FORMATIONS[ch.v].slice(); side.sl=sl; side.o=sl.map(()=> 'normal');
+        push(x,{k:'sub', s:code, p:'', tx:`Formasjonsendring for ${side.team.name}: laget går over til ${ch.v}.`});
+      }
+    }
+  }
   for(let wi=0; wi<wins.length; wi++){
     const [x0,x1]=wins[wi]; const w=x1-x0; const frac=w/Ttot;
     const diff=[sc[0]-sc[1], sc[1]-sc[0]];
+    doChanges(sides[0],x0,diff[0],'h'); doChanges(sides[1],x0,diff[1],'a');
     doSubs(sides[0],x0,diff[0],'h'); doSubs(sides[1],x0,diff[1],'a');
     const rat=[sideRat(sides[0],Math.max(0,-diff[0])), sideRat(sides[1],Math.max(0,-diff[1]))];
     if(!firstRat) firstRat=rat.map(a=>a.slice());
@@ -714,7 +738,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s,a.si,a.w]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f0, af:sides[1].f0, tc:[sides[0].tac0,sides[1].tac0], tf:[sides[0].f,sides[1].f], L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s,a.si,a.w]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
@@ -930,7 +954,7 @@ return {
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
   slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
-  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, TAC, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
 

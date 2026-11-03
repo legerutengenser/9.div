@@ -666,6 +666,8 @@ function ensureLineup(team){
   if(!lu.cap || !ids.has(lu.cap)){ lu.cap=bestCaptainId(mapById(team.players),lu.sl); changed=true; }
   const subs=Array.isArray(lu.subs)?lu.subs:[]; const okSubs=subs.filter(x=>x&&ids.has(x.out)&&ids.has(x.inn)&&x.out!==x.inn).slice(0,5);
   if(!Array.isArray(lu.subs) || okSubs.length!==subs.length){ lu.subs=okSubs; changed=true; }
+  if(lu.tac && !TAC[lu.tac]){ lu.tac='normal'; changed=true; }
+  if(lu.chg!=null){ const ch=Array.isArray(lu.chg)?lu.chg:[]; const okc=ch.filter(x=>x&&((x.k==='tac'&&TAC[x.v])||(x.k==='form'&&FORMATIONS[x.v]))).slice(0,4); if(!Array.isArray(lu.chg)||okc.length!==ch.length){ lu.chg=okc; changed=true; } }
   return changed;
 }
 function teamStrength(team){ ensureLineup(team); return lineupQuality(calcRatings(team.players, team.lineup)); }
@@ -796,7 +798,16 @@ const FOUL_W = {GK:.05, DC:1.2, DL:1, DR:1, MC:1.3, WL:.8, WR:.8, AL:.7, AR:.7, 
 const RATE_REF = {GK:6.7, DL:5.5, DR:5.5, DC:3.2, MC:5.0, WL:6.2, WR:6.2, AL:6.6, AR:6.6, FC:4.8};
 const PG0 = 0.31, PGK = 1.0, RD_ = 0.5;
 const SUB_SLOTS = ['DC','DL','DR','MC','WL','WR','AL','AR','FC'];
-const SUB_COND = {always:'Alltid', trail:'Ved tap', lead:'Ved ledelse', draw:'Ved uavgjort'};
+const SUB_COND = {always:'Alltid', trail:'Ved tap', draw:'Ved uavgjort', nolead:'Hvis ikke i ledelse', lead:'Ved ledelse'};
+/* taktikker: multiplikator per sektor [LD,CD,RD,MD,LA,CA,RA] */
+const TAC = {
+  normal:{n:'Normal', m:[1,1,1,1,1,1,1], d:'Ingen spesiell taktikk.'},
+  counter:{n:'Kontringer', m:[1,1,1,.93,1.08,1.08,1.08], d:'Laget trekker seg tilbake og slår raskt. Angrepet blir noe sterkere, men midtbanen svekkes.'},
+  mid:{n:'Angrep i midten', m:[.95,1,.95,1,1,1.16,1], d:'Angrepet samles i midten og blir sterkere der, men vingforsvaret blir dårligere.'},
+  wings:{n:'Angrep på sidene', m:[1,.95,1,1,1.07,1,1.07], d:'Angrepet legges ut på kantene og blir sterkere der, men midtforsvaret blir litt dårligere.'},
+  poss:{n:'Ekstra ballfordeling', m:[1,1,1,1.08,.95,.95,.95], d:'Laget holder ballen og styrer midtbanen, men angrepet svekkes noe.'}
+};
+const condOk=(c,d)=> c==='trail'?d<0 : c==='lead'?d>0 : c==='draw'?d===0 : c==='nolead'?d<=0 : true;
 function fm(p){ return formMult(p); }
 function calcRatingsSl(by, types, sl, o){
   const r=[0,0,0,0,0,0,0];
@@ -810,7 +821,7 @@ function mkSide(team, home, r){
   const {lu,by,sus}=effLineup(team);
   return {team, by, types:slotsOf(lu).slice(), sl:lu.sl.slice(), o:lu.o.slice(), f:lu.f, home,
     mult:home?1.06:1, noise:[0,0,0,0,0,0,0].map(()=>1+normal(r)*0.035),
-    capId:lu.cap, tkId:lu.tk, subs:(lu.subs||[]).slice(0,5).map(s=>({...s,done:false})), subsLeft:5,
+    tac:lu.tac||'normal', tac0:lu.tac||'normal', f0:lu.f, chg:(lu.chg||[]).slice(0,4).map(c=>({...c,done:false})), capId:lu.cap, tkId:lu.tk, subs:(lu.subs||[]).slice(0,5).map(s=>({...s,done:false})), subsLeft:5,
     yel:{}, played:new Set(lu.sl.filter(Boolean)), sus, capTalk:false, ratSum:0};
 }
 function onField(side){ const o=[]; side.types.forEach((st,i)=>{ const p=side.by[side.sl[i]]; if(p) o.push({st, p, ord:(side.o&&side.o[i])||'normal', i}); }); return o; }
@@ -822,7 +833,8 @@ function capInfo(side){
 function sideRat(side, deficit){
   const rat=calcRatingsSl(side.by, side.types, side.sl, side.o);
   const ci=capInfo(side); const cf=1+ci.q*(0.02+(deficit>=2?0.045:deficit===1?0.03:0));
-  return rat.map((v,k)=>v*side.mult*side.noise[k]*cf);
+  const tm=(TAC[side.tac]||TAC.normal).m;
+  return rat.map((v,k)=>v*side.mult*side.noise[k]*cf*tm[k]);
 }
 function mkCtx(side, rat){
   const xi=onField(side); const gk=xi.find(x=>x.st==='GK');
@@ -1010,7 +1022,7 @@ function simulateMatch(Ht, At, r){
       if(sb.done || side.subsLeft<=0) continue;
       if(gm(x)<sb.m) continue;
       const c=sb.c||'always';
-      if(c==='trail' && deficit<=0) continue; if(c==='lead' && deficit>=0) continue; if(c==='draw' && deficit!==0) continue;
+      if(!condOk(c,deficit)) continue;
       const i=side.sl.indexOf(sb.out); const inn=side.by[sb.inn];
       if(i<0 || !inn || side.played.has(sb.inn) || side.sus.has(sb.inn)){ if(i<0||!inn||side.played.has(sb.inn)||side.sus.has(sb.inn)) sb.done=true; continue; }
       sb.done=true; side.subsLeft--;
@@ -1020,14 +1032,26 @@ function simulateMatch(Ht, At, r){
       if(sb.as && sb.as!==side.types[i] && SUB_SLOTS.includes(sb.as) && side.types[i]!=='GK'){ side.types[i]=sb.as; moved=` ${inn.n} spiller nå som ${SLOT_NAME[sb.as].toLowerCase()}.`; }
       if(!ordersFor(side.types[i]).includes(side.o[i])) side.o[i]='normal'; else side.o[i]='normal';
       if(side.capId===sb.out) { /* kapteinsbind overtas av beste på banen via capInfo */ }
-      const why=c==='trail'?' Treneren satser offensivt.':c==='lead'?' Treneren sikrer ledelsen.':'';
+      const why=c==='trail'||c==='nolead'?' Treneren satser offensivt.':c==='lead'?' Treneren sikrer ledelsen.':'';
       push(x,{k:'sub', s:sideCode, p:inn.n, i:inn.id, tx:`Bytte for ${side.team.name}: ${inn.n} kommer inn for ${outP?outP.n:'en spiller'}.${moved}${why}`});
     }
   }
 
+  function doChanges(side,x,d,code){
+    for(const ch of side.chg){
+      if(ch.done||gm(x)<ch.m) continue; if(!condOk(ch.c||'always',d)) continue; ch.done=true;
+      if(ch.k==='tac' && TAC[ch.v] && side.tac!==ch.v){ side.tac=ch.v; push(x,{k:'sub', s:code, p:'', tx:`Taktikkendring for ${side.team.name}: spiller nå ${TAC[ch.v].n.toLowerCase()}.`}); }
+      else if(ch.k==='form' && FORMATIONS[ch.v] && side.f!==ch.v){
+        const field=side.sl.map(id=>side.by[id]).filter(Boolean); const sl=assignFormation(field,ch.v);
+        side.f=ch.v; side.types=FORMATIONS[ch.v].slice(); side.sl=sl; side.o=sl.map(()=> 'normal');
+        push(x,{k:'sub', s:code, p:'', tx:`Formasjonsendring for ${side.team.name}: laget går over til ${ch.v}.`});
+      }
+    }
+  }
   for(let wi=0; wi<wins.length; wi++){
     const [x0,x1]=wins[wi]; const w=x1-x0; const frac=w/Ttot;
     const diff=[sc[0]-sc[1], sc[1]-sc[0]];
+    doChanges(sides[0],x0,diff[0],'h'); doChanges(sides[1],x0,diff[1],'a');
     doSubs(sides[0],x0,diff[0],'h'); doSubs(sides[1],x0,diff[1],'a');
     const rat=[sideRat(sides[0],Math.max(0,-diff[0])), sideRat(sides[1],Math.max(0,-diff[1]))];
     if(!firstRat) firstRat=rat.map(a=>a.slice());
@@ -1069,7 +1093,7 @@ function simulateMatch(Ht, At, r){
   });
   const round1=a=>a.map(v=>Math.round(v*10)/10);
   const shareH=shareSum/Ttot;
-  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f, af:sides[1].f, L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s,a.si,a.w]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
+  return {hg, ag, hs:shots[0], as:shots[1], hp:Math.round(shareH*100), hr:round1(firstRat[0]), ar:round1(firstRat[1]), hf:sides[0].f0, af:sides[1].f0, tc:[sides[0].tac0,sides[1].tac0], tf:[sides[0].f,sides[1].f], L1, L2, ty:startTy, rs, xg:[Math.round(xg[0]*100)/100,Math.round(xg[1]*100)/100], pr:Object.fromEntries(Object.entries(pacc).map(([id,a])=>[id,[Math.round(clamp(5*(a.c/Math.max(1,a.m))/(RATE_REF[a.st]||5),0,10)*10),Math.round(a.m),a.st,a.n,a.h?'h':'a',a.i,a.s,a.si,a.w]])), cd:cards, pl:{h:[...sides[0].played], a:[...sides[1].played]}, ev};
 }
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
@@ -1285,7 +1309,7 @@ return {
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
   slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
-  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, TAC, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
 
@@ -1919,12 +1943,26 @@ function capSubsPanel(t,lu,by,xi){
     <label class="f">Inn<select data-change="subf" data-n="${n}" data-f="inn">${inList.map(p=>`<option value="${p.id}"${p.id===x.inn?' selected':''}>${esc(surname(p))} (${roleOf(p)})</option>`).join('')}</select></label>
     <label class="f">Posisjon<select data-change="subf" data-n="${n}" data-f="as"><option value="">Samme</option>${E.SUB_SLOTS.map(k=>`<option value="${k}"${x.as===k?' selected':''}>${E.SLOT_NAME[k]}</option>`).join('')}</select></label>
     <button class="btn sm" data-act="subdel" data-n="${n}" aria-label="Fjern bytte">Fjern</button></div>`; };
-  return `<div class="card"><h3>Kaptein <small>${cur?esc(cur.n):''}</small></h3>
+  const chg=lu.chg||[]; const tacK=lu.tac||'normal'; const lockd=luLocked();
+  const chgRow=(x,n)=>`<div class="subrow">
+    <label class="f">Fra<select data-change="chgf" data-n="${n}" data-f="m">${mins.map(m=>`<option value="${m}"${x.m===m?' selected':''}>${m===45?'Etter pause':m+'. min'}</option>`).join('')}</select></label>
+    <label class="f">Når<select data-change="chgf" data-n="${n}" data-f="c">${Object.entries(E.SUB_COND).map(([k,v])=>`<option value="${k}"${(x.c||'always')===k?' selected':''}>${v}</option>`).join('')}</select></label>
+    <label class="f">Endring<select data-change="chgf" data-n="${n}" data-f="k"><option value="tac"${x.k==='tac'?' selected':''}>Ny taktikk</option><option value="form"${x.k==='form'?' selected':''}>Ny formasjon</option></select></label>
+    <label class="f">${x.k==='form'?'Formasjon':'Taktikk'}<select data-change="chgf" data-n="${n}" data-f="v">${x.k==='form'?Object.keys(E.FORMATIONS).map(f=>`<option value="${f}"${x.v===f?' selected':''}>${f}</option>`).join(''):Object.entries(E.TAC).map(([k,v])=>`<option value="${k}"${x.v===k?' selected':''}>${v.n}</option>`).join('')}</select></label>
+    <button class="btn sm" data-act="chgdel" data-n="${n}" aria-label="Fjern endring">Fjern</button></div>`;
+  const tacCard=`<div class="card"><h3>Taktikk <small>${E.TAC[tacK].n}</small></h3>
+  <label class="f">Velg taktikk<select data-change="tactic">${Object.entries(E.TAC).map(([k,v])=>`<option value="${k}"${k===tacK?' selected':''}>${v.n}</option>`).join('')}</select></label>
+  <p class="small muted" style="margin:10px 0 0;max-width:60ch">${E.TAC[tacK].d}</p>
+  <h3 style="margin-top:18px">Endringer underveis <small>${chg.length} av 4</small></h3>
+  <p class="small muted" style="margin:0 0 12px;max-width:62ch">Planlegg å bytte taktikk eller formasjon i løpet av kampen, for eksempel «Fra 60. min, hvis ikke i ledelse: Ny formasjon 3-4-3». Alt må legges inn her på forhånd. Ved formasjonsbytte flyttes spillerne på banen automatisk til de plassene de passer best på.</p>
+  ${chg.length?chg.map(chgRow).join(''):'<div class="empty" style="padding:14px 0">Ingen endringer planlagt.</div>'}
+  <div class="row" style="margin-top:12px"><button class="btn primary" data-act="chgadd"${chg.length>=4||lockd?' disabled':''}>Legg til endring</button></div></div>`;
+  return `${tacCard}<div class="card"><h3>Kaptein <small>${cur?esc(cur.n):''}</small></h3>
   ${susXI.length?`<div class="note" style="margin-bottom:12px">${susXI.map(p=>esc(p.n)).join(', ')} er utestengt og blir erstattet automatisk i neste kamp.</div>`:''}
   <label class="f">Velg kaptein<select data-change="cap">${capList.map(p=>`<option value="${p.id}"${p.id===lu.cap?' selected':''}>${esc(p.n)} – ${E.capLabel(p)}</option>`).join('')}</select></label>
   <p class="small muted" style="margin:10px 0 0;max-width:60ch">God lederegenskap og erfaring gir en bedre kaptein. En god kaptein løfter hele laget litt, og mest når dere ligger under. Erfaring bygges opp ved at spillerne spiller kamper.</p></div>
   <div class="card"><h3>Planlagte bytter <small>${subs.length} av 5</small></h3>
-  <p class="small muted" style="margin:0 0 12px;max-width:62ch">Byttet gjøres tidligst ved valgt minutt, og bare hvis betingelsen er oppfylt. For å sette inn en ekstra angriper når dere ligger under, velger du «Ved tap», lar en forsvarsspiller gå ut og velger «Spiss» som posisjon. Du kan bytte inntil fem ganger. Spillere som er byttet ut, kan ikke komme inn igjen.</p>
+  <p class="small muted" style="margin:0 0 12px;max-width:62ch">Byttet gjøres tidligst ved valgt minutt, og bare hvis betingelsen er oppfylt. For å sette inn en ekstra angriper når dere ligger under, velger du «Ved tap» eller «Hvis ikke i ledelse», lar en forsvarsspiller gå ut og velger «Spiss» som posisjon. Du kan bytte inntil fem ganger. Spillere som er byttet ut, kan ikke komme inn igjen.</p>
   ${subs.length?subs.map(row).join(''):'<div class="empty" style="padding:14px 0">Ingen bytter planlagt.</div>'}
   <div class="row" style="margin-top:12px"><button class="btn primary" data-act="subadd"${subs.length>=5||luLocked()?' disabled':''}>Legg til bytte</button></div></div>`;
 }
@@ -2023,7 +2061,7 @@ function fxRow(m,me){
   return `<button class="fx${mine?' me':''}" data-act="match" data-r="${m.__r!=null?m.__r:''}" data-h="${m.h}"><span class="t">${crest(H,20)}<span>${esc(H.name)}</span></span><span class="sc num">${m.hg} – ${m.ag}</span><span class="t a">${crest(A,20)}<span>${esc(A.name)}</span></span></button>`;
 }
 function statsHtml(m,H,A){
-  return `<div style="margin-top:18px"><div class="caps" style="margin-bottom:8px">Statistikk</div><dl class="kv small"><dt>Formasjon</dt><dd>${m.hf} mot ${m.af}</dd><dt>Ballbesittelse</dt><dd>${m.hp} % – ${100-m.hp} %</dd><dt>Skudd og dødballer</dt><dd>${m.hs} – ${m.as}</dd>${m.cd?`<dt>Gule kort</dt><dd>${m.cd.filter(c=>c.k==='y'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='y'&&c.s==='a').length}</dd><dt>Røde kort</dt><dd>${m.cd.filter(c=>c.k==='r'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='r'&&c.s==='a').length}</dd>`:''}</dl></div>`;
+  return `<div style="margin-top:18px"><div class="caps" style="margin-bottom:8px">Statistikk</div><dl class="kv small"><dt>Formasjon</dt><dd>${m.hf} mot ${m.af}${m.tf&&(m.tf[0]!==m.hf||m.tf[1]!==m.af)?` (slutt: ${m.tf[0]} mot ${m.tf[1]})`:''}</dd>${m.tc&&(m.tc[0]!=='normal'||m.tc[1]!=='normal')?`<dt>Taktikk</dt><dd>${E.TAC[m.tc[0]]?E.TAC[m.tc[0]].n:'Normal'} mot ${E.TAC[m.tc[1]]?E.TAC[m.tc[1]].n:'Normal'}</dd>`:''}<dt>Ballbesittelse</dt><dd>${m.hp} % – ${100-m.hp} %</dd><dt>Skudd og dødballer</dt><dd>${m.hs} – ${m.as}</dd>${m.cd?`<dt>Gule kort</dt><dd>${m.cd.filter(c=>c.k==='y'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='y'&&c.s==='a').length}</dd><dt>Røde kort</dt><dd>${m.cd.filter(c=>c.k==='r'&&c.s==='h').length} – ${m.cd.filter(c=>c.k==='r'&&c.s==='a').length}</dd>`:''}</dl></div>`;
 }
 function feedHtml(list,m){
   const H=m&&S.teams[m.h], A=m&&S.teams[m.a];
@@ -2260,7 +2298,7 @@ function viewHelp(){
   <h3>Liga og kamper</h3><ul><li>14 lag i én divisjon. Alle møter alle to ganger, så en sesong er 26 runder.</li><li>Alle lag spiller tre ganger i uka: tirsdag, fredag og søndag klokka 18.00 norsk tid.</li><li>Kampene spilles i sanntid: 45 minutter pluss tilleggstid, 15 minutter pause og så 45 minutter pluss tilleggstid. Er du inne på siden mens kampen pågår, får du kommentarer og beskjed om mål underveis.</li><li>Oppstillingen låses ved avspark og åpnes igjen når alle kamper er ferdige. Tabellen oppdateres først da.</li><li>Lag uten menneskelig manager styres av datamaskinen. Når du tar over et lag, erstatter du datamaskinen og beholder spillerne.</li><li>Spillet kjører ikke på noen server. Første som åpner siden etter avspark setter kampene i gang, og alle ser det samme med riktig klokkeslett. Kommer du inn midt i kampen, ser du først det som har skjedd så langt.</li></ul>
   <h3>Spillere og egenskaper</h3><ul><li>Alle spillere er fantasispillere. På A-laget kan spillere være 17 år og eldre.</li><li>Sju egenskaper fra 0 til 20: Keeper, Forsvar, Midtbane, Pasning, Ving, Scoring og Dødballer.</li><li>Fra 30 år mister spillerne gradvis nivå, raskere jo eldre de blir. Ving og forsvar faller først, dødballer og keeper holder lengst.</li><li>Alder måles i år og dager. Ett aldersår tilsvarer at serien er spilt to ganger (52 runder, omtrent 17 uker), og hver spiller har sin egen bursdag. Etter hver sesong legger de eldste opp, og hvert lag får en ny ungdomsspiller på 17 år.</li></ul>
   <h3>Trening</h3><ul><li>Velg én eller to egenskaper. Med to får hver av dem 60 % effekt.</li><li>Trening av forsvar gir mye til forsvarere og backer, litt til midtbane og lite til spisser. Det samme prinsippet gjelder for de andre egenskapene.</li><li>Lave nivåer går fort. Hvert nivå krever omtrent 16 % mer trening enn det forrige. Spillere fra 17 til 22 år trener opptil 2,2 ganger så fort som voksne. Treningen oppdateres etter hver kamp. En 17-åring med nivå 7 i midtbane kan med full trening nå nivå 15 på omtrent 21 uker, mens en voksen bruker rundt det dobbelte. Formen oppdateres derimot bare én gang i uka. Spillere som ikke er med i startellveren trener med halv effekt.</li></ul>
-  <h3>Ratinger og oppstilling</h3><ul><li>Spillernes egenskaper gir sju ratinger: forsvar venstre, midten og høyre, midtbane, og angrep venstre, midten og høyre.</li><li>Backer og ving bidrar mest på sin egen side. Midtbane styrer midtbanen og hjelper midtforsvaret og midtangrepet. Pasning bidrar til angrep, men mindre enn scoring for spisser og ving for vinger.</li><li>Du kan sende en spiller i en bestemt retning. En defensiv midtbane gir mer forsvar men mindre angrep, og «Mot venstre» flytter noe av innsatsen ut på kanten.</li><li>Formen går opp og ned fra uke til uke og påvirker alle ratingene.</li><li><b>Keeper:</b> Keeperskill teller mest for keeperen. Han bidrar sterkt til midtforsvaret og litt til sidene, og avgjør mye i hver avslutning. Forsvarsskill teller ikke for keeperen. På frispark, hjørnespark og straffer teller dødball mest for keeperen, og keeperskill teller en del.</li><li><b>Marked:</b> Det er flere spillere til salgs enn før, og rundt fire av ti er unge talenter mellom 17 og 20 år. Nye spillere kommer hver tirsdag og fylles på underveis. Trykk på en spiller for å se alle egenskapene hans. På spillere på andre lag ser du bare omtrentlige nivåer.</li><li><b>Kamper:</b> Fanen viser dine spilte og kommende kamper. Trykk på en spilt kamp for resultat, ratinger, spillerratinger og flaks. Trykk på en kommende kamp for å sette opp laget akkurat for den kampen.</li><li><b>Oppstilling per kamp:</b> Du kan sette opp formasjon, spillere, dødballtaker, kaptein og bytter for hver kommende kamp, også flere uker frem. Kamper uten egen oppstilling bruker standardoppstillingen. Standarden er låst mens kampene pågår, men kommende kamper kan endres hele tiden. Under oppstillingen kan du sammenligne ratingene dine med motstanderens siste kamper.</li><li><b>Lagre oppstilling:</b> Endringer i Oppstilling blir et utkast til du trykker «Lagre oppstilling». Går du til en annen fane eller en annen kamp uten å lagre, forkastes utkastet og den lagrede oppstillingen beholdes. «Angre endringer» tilbakestiller utkastet.</li><li><b>Spillerlisten:</b> Sorter etter egenskap eller posisjon, og dra spillere til banen eller mellom plassene.</li><li><b>Ratinger i kampen:</b> Under og etter kampen vises ratingene som søyler mot hverandre: midtangrep mot midtforsvar, venstre angrep mot motstanderens høyre forsvar, høyre angrep mot venstre forsvar, og midtbane mot midtbane. Ratingene oppdateres underveis, så du ser hva bytter og røde kort gjør. Etter kampen kan du dra i glidebryteren for å se ratingene i et bestemt minutt.</li><li><b>Spillerrating:</b> Hver spiller får et tall for kampen ut fra hvor mye han bidro til lagets ratinger (egenskaper, form, rolle og ordre) som snitt over minuttene han var på banen. En spiller som byttes ut etter en flott første omgang beholder ratingen sin. 5 er typisk for rollen, 7 og over er en god kamp.</li><li><b>Flaks og uflaks:</b> Hver sjanse har en sannsynlighet for mål. Summen er forventede mål. Pilen viser hvilket lag som fikk mer ut av sjansene enn de fortjente.</li><li><b>Reprise:</b> Når du logger inn etter at en kamp er spilt, kan du velge å se den i reprise eller få resultatet direkte. Reprise finnes også under hver ferdigspilt kamp.</li><li><b>Draktnummer:</b> Under Spillere kan du gi spillerne nummer og sortere etter dem.</li><li><b>Mål fra åpent spill:</b> Om et angrep ender i mål avgjøres av lagets rating i angrepssonen (venstre, midten eller høyre) mot motstanderens forsvarsrating i samme sone, keeper inkludert. Spilleren som avslutter er bare den som får æren. Formasjonen påvirker målantallet: offensive oppsett som 3-4-3 og 3-5-2 gir flest mål, mens 5-4-1 og 5-3-2 gir få.</li><li><b>Straffer:</b> Fouler i feltet gir straffe. Den tas av dødballtakeren, og dødball teller mest for skytteren, mens scoring teller litt. Mot keeperen avgjør dødball og keeperskill.</li><li><b>Ving:</b> Settes en ving offensivt, bidrar han mer til sideangrep og litt mindre til midtbane og forsvar. Settes han mot midten, bidrar han litt mer til midtbanen, men mindre til sideforsvar og sideangrep.</li><li><b>Spiss:</b> Spissen kan spille normalt, mot siden eller defensivt. En defensiv spiss gir mer midtbane og mindre angrep.</li><li><b>Forsvar:</b> Spiller du med tre, fire eller fem forsvarsspillere, kan du velge om de spiller som midtstoppere eller backer. Maks tre midtstoppere og én back på hver side.</li></ul>
+  <h3>Ratinger og oppstilling</h3><ul><li>Spillernes egenskaper gir sju ratinger: forsvar venstre, midten og høyre, midtbane, og angrep venstre, midten og høyre.</li><li>Backer og ving bidrar mest på sin egen side. Midtbane styrer midtbanen og hjelper midtforsvaret og midtangrepet. Pasning bidrar til angrep, men mindre enn scoring for spisser og ving for vinger.</li><li>Du kan sende en spiller i en bestemt retning. En defensiv midtbane gir mer forsvar men mindre angrep, og «Mot venstre» flytter noe av innsatsen ut på kanten.</li><li>Formen går opp og ned fra uke til uke og påvirker alle ratingene.</li><li><b>Keeper:</b> Keeperskill teller mest for keeperen. Han bidrar sterkt til midtforsvaret og litt til sidene, og avgjør mye i hver avslutning. Forsvarsskill teller ikke for keeperen. På frispark, hjørnespark og straffer teller dødball mest for keeperen, og keeperskill teller en del.</li><li><b>Marked:</b> Det er flere spillere til salgs enn før, og rundt fire av ti er unge talenter mellom 17 og 20 år. Nye spillere kommer hver tirsdag og fylles på underveis. Trykk på en spiller for å se alle egenskapene hans. På spillere på andre lag ser du bare omtrentlige nivåer.</li><li><b>Kamper:</b> Fanen viser dine spilte og kommende kamper. Trykk på en spilt kamp for resultat, ratinger, spillerratinger og flaks. Trykk på en kommende kamp for å sette opp laget akkurat for den kampen.</li><li><b>Oppstilling per kamp:</b> Du kan sette opp formasjon, spillere, dødballtaker, kaptein og bytter for hver kommende kamp, også flere uker frem. Kamper uten egen oppstilling bruker standardoppstillingen. Standarden er låst mens kampene pågår, men kommende kamper kan endres hele tiden. Under oppstillingen kan du sammenligne ratingene dine med motstanderens siste kamper.</li><li><b>Taktikk:</b> Velg en taktikk under Oppstilling: Kontringer (sterkere angrep, svakere midtbane), Angrep i midten (sterkere midtangrep, svakere vingforsvar), Angrep på sidene (sterkere kantangrep, litt svakere midtforsvar) eller Ekstra ballfordeling (sterkere midtbane, svakere angrep). Ingen taktikk er best mot alle.</li><li><b>Endringer underveis:</b> Du kan planlegge bytter, taktikkskifter og formasjonsskifter som skjer fra et bestemt minutt, eventuelt bare hvis du ligger under, er i ledelse eller ikke leder. Alt må legges inn før kampen starter.</li><li><b>Lagre oppstilling:</b> Endringer i Oppstilling blir et utkast til du trykker «Lagre oppstilling». Går du til en annen fane eller en annen kamp uten å lagre, forkastes utkastet og den lagrede oppstillingen beholdes. «Angre endringer» tilbakestiller utkastet.</li><li><b>Spillerlisten:</b> Sorter etter egenskap eller posisjon, og dra spillere til banen eller mellom plassene.</li><li><b>Ratinger i kampen:</b> Under og etter kampen vises ratingene som søyler mot hverandre: midtangrep mot midtforsvar, venstre angrep mot motstanderens høyre forsvar, høyre angrep mot venstre forsvar, og midtbane mot midtbane. Ratingene oppdateres underveis, så du ser hva bytter og røde kort gjør. Etter kampen kan du dra i glidebryteren for å se ratingene i et bestemt minutt.</li><li><b>Spillerrating:</b> Hver spiller får et tall for kampen ut fra hvor mye han bidro til lagets ratinger (egenskaper, form, rolle og ordre) som snitt over minuttene han var på banen. En spiller som byttes ut etter en flott første omgang beholder ratingen sin. 5 er typisk for rollen, 7 og over er en god kamp.</li><li><b>Flaks og uflaks:</b> Hver sjanse har en sannsynlighet for mål. Summen er forventede mål. Pilen viser hvilket lag som fikk mer ut av sjansene enn de fortjente.</li><li><b>Reprise:</b> Når du logger inn etter at en kamp er spilt, kan du velge å se den i reprise eller få resultatet direkte. Reprise finnes også under hver ferdigspilt kamp.</li><li><b>Draktnummer:</b> Under Spillere kan du gi spillerne nummer og sortere etter dem.</li><li><b>Mål fra åpent spill:</b> Om et angrep ender i mål avgjøres av lagets rating i angrepssonen (venstre, midten eller høyre) mot motstanderens forsvarsrating i samme sone, keeper inkludert. Spilleren som avslutter er bare den som får æren. Formasjonen påvirker målantallet: offensive oppsett som 3-4-3 og 3-5-2 gir flest mål, mens 5-4-1 og 5-3-2 gir få.</li><li><b>Straffer:</b> Fouler i feltet gir straffe. Den tas av dødballtakeren, og dødball teller mest for skytteren, mens scoring teller litt. Mot keeperen avgjør dødball og keeperskill.</li><li><b>Ving:</b> Settes en ving offensivt, bidrar han mer til sideangrep og litt mindre til midtbane og forsvar. Settes han mot midten, bidrar han litt mer til midtbanen, men mindre til sideforsvar og sideangrep.</li><li><b>Spiss:</b> Spissen kan spille normalt, mot siden eller defensivt. En defensiv spiss gir mer midtbane og mindre angrep.</li><li><b>Forsvar:</b> Spiller du med tre, fire eller fem forsvarsspillere, kan du velge om de spiller som midtstoppere eller backer. Maks tre midtstoppere og én back på hver side.</li></ul>
   <h3>Personlighet, erfaring og kaptein</h3><ul><li>Spillerne har temperament, lederegenskap og noen har en spillestil: Lagspiller, Individualist, Kjemper eller Fair spiller. Du ser det på spillerkortet.</li><li>Erfaring bygges opp ved at spillerne spiller kamper. Lederegenskap og erfaring avgjør hvor godt egnet en spiller er som kaptein.</li><li>En god kaptein løfter alle ratingene litt, og mest når laget ligger under. Spilles kapteinen av banen, tar den beste på banen over med litt mindre effekt.</li></ul>
   <h3>Kort og utestengelse</h3><ul><li>Temperamentsfulle spillere forårsaker lettere frispark og får oftere gult kort.</li><li>To gule kort i samme kamp gir rødt kort. Rødt kort er sjeldent, og laget må spille resten av kampen med ti mann.</li><li>Rødt kort gir én kamps utestengelse. Det samme gjelder tre gule kort i ulike kamper.</li></ul>
   <h3>Bytter</h3><ul><li>Hvert lag kan bytte inntil fem spillere i løpet av en kamp. Du planlegger dem i Oppstilling: velg minutt, betingelse (alltid, ved tap, ved ledelse eller ved uavgjort), hvem som går ut og inn, og eventuelt ny posisjon.</li><li>Eksempel: ved tap fra 60. minutt går en midtstopper ut og en ekstra spiss kommer inn. Ved ledelse kan du gjøre det motsatte.</li></ul>
@@ -2364,7 +2402,7 @@ const actions={
   assign(el){ doAssign(S.sel,el.dataset.id); },
   role(el){ const t=myTeam(); const lu=clone(curLU(t)); const base=E.FORMATIONS[lu.f]; const ty=E.slotsOf(lu).slice(); ty[S.sel]=el.dataset.r; if(!E.validTy(base,ty)){ toast('Du kan ikke stille med mer enn tre midtstoppere og ikke mer enn én back på hver side.',true); return; } lu.ty=ty.every((x,i)=>x===base[i])?null:ty; lu.o[S.sel]='normal'; saveLU(lu); },
   order(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.o[S.sel]=el.dataset.o; saveLU(lu); },
-  auto(){ const t=myTeam(); const c=clone(t); c.ai=null; const lu=E.autoLineup(c); saveLU(lu); toast('Oppstillingen er satt opp automatisk. Husk å lagre.'); },
+  auto(){ const t=myTeam(); const c=clone(t); c.ai=null; const lu=E.autoLineup(c); lu.tac=(curLU(t).tac)||'normal'; saveLU(lu); toast('Oppstillingen er satt opp automatisk. Husk å lagre.'); },
   lusave(){ commitDraft(); },
   ludiscard(){ S.draft=null; toast('Endringene er angret.'); render(); },
   claim(el){ const t=S.teams[+el.dataset.i]; openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>Ta over ${esc(t.name)}</h3><p class="muted small" style="margin:4px 0 14px">Du kan gi klubben et nytt navn nå, eller beholde det gamle. Du kan også endre det senere.</p><div class="row"><label class="f">Klubbnavn<input type="text" id="claimName" maxlength="28" value="${esc(t.name)}"></label><button class="btn primary" data-act="doclaim" data-i="${t.i}" style="align-self:flex-end">Bli manager</button></div>`); setTimeout(()=>{ const i=$('#claimName'); if(i){ i.focus(); i.select(); } },0); },
@@ -2374,6 +2412,8 @@ const actions={
     const bench=t.players.filter(p=>!lu.sl.includes(p.id)&&!isSus(p)&&!usedIn.has(p.id)); if(oi<0||!bench.length){ toast('Du trenger en ledig spiller på benken og en spiller å bytte ut.',true); return; }
     bench.sort((a,b)=>E.slotScore(b,slots[oi])-E.slotScore(a,slots[oi]));
     lu.subs.push({m:60,c:'always',out:lu.sl[oi],inn:bench[0].id,as:null}); saveLU(lu); },
+  chgadd(){ const t=myTeam(); const lu=clone(curLU(t)); lu.chg=lu.chg||[]; if(lu.chg.length>=4) return; lu.chg.push({m:60,c:'nolead',k:'tac',v:'wings'}); saveLU(lu); },
+  chgdel(el){ const t=myTeam(); const lu=clone(curLU(t)); (lu.chg||[]).splice(+el.dataset.n,1); saveLU(lu); },
   ssort(el){ S.sortKey=el.dataset.k; render(); },
   msort(el){ S.mf.sort=el.dataset.k; render(); },
   lsortk(el){ S.lsort='sk:'+el.dataset.k; render(); },
@@ -2420,6 +2460,8 @@ const actions={
 const changes={
   formation(el){ const t=myTeam(); const lu=clone(curLU(t)); const by=E.mapById(t.players); const xi=lu.sl.map(id=>by[id]).filter(Boolean); lu.f=el.value; lu.ty=null; lu.sl=E.assignFormation(xi,el.value); lu.o=lu.sl.map(()=> 'normal'); lu.tk=E.bestTaker(t.players,lu.sl); S.sel=Math.min(S.sel,10); saveLU(lu); },
   cap(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.cap=el.value; saveLU(lu); },
+  tactic(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.tac=el.value; saveLU(lu); },
+  chgf(el){ const t=myTeam(); const lu=clone(curLU(t)); const x=(lu.chg||[])[+el.dataset.n]; if(!x) return; const f=el.dataset.f; x[f]= f==='m'?+el.value : el.value; if(f==='k') x.v= el.value==='form'?'3-4-3':'wings'; saveLU(lu); },
   subf(el){ const t=myTeam(); const lu=clone(curLU(t)); const x=(lu.subs||[])[+el.dataset.n]; if(!x) return; const f=el.dataset.f; x[f]= f==='m'?+el.value : f==='as'?(el.value||null) : el.value; if(x.out===x.inn){ toast('Spilleren som går ut og inn må være ulike.',true); render(); return; } saveLU(lu); },
   taker(el){ const t=myTeam(); const lu=clone(curLU(t)); lu.tk=el.value; saveLU(lu); },
   sort(el){ S.sortKey=el.value; render(); },
