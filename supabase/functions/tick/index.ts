@@ -333,6 +333,19 @@ function lineupRoles(team){ const m={}; const slots=slotsOf(team.lineup); team.l
 function trainShare(team){ const tr=team.training||{}; const ks=[tr.a,tr.b].filter(Boolean); return {ks, share: ks.length===2?0.6:1}; }
 const TRAIN_SCALE = 0.48;   // per uke; trenes i tre like deler, en etter hver kamp
 function trainingRate(p, k, role, inLine, share){ return TRAIN_SCALE*REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
+/* treningsrapport: endringer samles i team.tp og skrives som en rapport i team.trh etter hver kamp */
+function recSk(team,p,k,from,to){
+  if(!team.owner) return; const tp=team.tp||(team.tp={ch:[],fm:[]}); let e=tp.ch.find(x=>x.i===p.id&&x.k===k);
+  if(e){ e.b=to; if(e.a===e.b) tp.ch.splice(tp.ch.indexOf(e),1); } else if(from!==to) tp.ch.push({i:p.id,p:p.n,k,a:from,b:to});
+}
+function recForm(team,p,from,to){
+  if(!team.owner||from===to) return; const tp=team.tp||(team.tp={ch:[],fm:[]}); tp.fm.push({i:p.id,p:p.n,a:from,b:to});
+}
+function pushReport(team,doc){
+  if(!team.owner){ team.tp=null; return; }
+  const tp=team.tp||{ch:[],fm:[]};
+  team.trh=[{g:doc.g,s:doc.s,r:doc.r,t:doc.t,ch:tp.ch,fm:tp.fm}].concat(team.trh||[]).slice(0,90); team.tp=null;
+}
 function trainTeam(team, r, week){
   const {ks,share}=trainShare(team); if(!ks.length) return;
   ensureLineup(team);
@@ -342,10 +355,10 @@ function trainTeam(team, r, week){
     for(const k of ks){
       const i=SKI[k]; if(p.s[i]>=20) continue;
       p.pr[i] += trainingRate(p,k,role,inLine,share)/3*(0.85+r()*0.3);
-      let up=0;
+      let up=0; const s0=p.s[i];
       while(p.s[i]<20 && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
       if(p.s[i]>=20) p.pr[i]=0;
-      if(up) team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1});
+      if(up){ team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1}); recSk(team,p,k,s0,p.s[i]); }
     }
   }
   team.tl = team.tl.slice(0,24);
@@ -356,7 +369,7 @@ function agingDecline(team, r, week){
     if(p.a<30) continue;
     const base=Math.min(0.045, 0.006*(p.a-29));
     SK.forEach((k,i)=>{
-      if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); }
+      if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); recSk(team,p,k,p.s[i]+1,p.s[i]); }
     });
   }
   team.tl = team.tl.slice(0,24);
@@ -365,7 +378,7 @@ function formDrift(team, r){
   for(const p of team.players){
     const x=r(); let step = x<.25?-1: x>.75?1:0;
     if(p.f>=7 && r()<.3) step=-1; if(p.f<=3 && r()<.3) step=1;
-    p.f=clamp((p.f||5)+step,1,8);
+    const f0=p.f||5; p.f=clamp(f0+step,1,8); recForm(team,p,f0,p.f);
   }
 }
 function aiPlan(team, r, week){
@@ -926,7 +939,7 @@ function finishRound(league, teams, doc, names){
     for(const e of res.ev){ if(!GOAL_KINDS[e.k]) continue; const T=(e.s==='h')?Ht:At; const pl=T.players.find(p=>p.id===e.i); if(pl) pl.gl=(pl.gl||0)+1; }
     out.changed.add(res.h); out.changed.add(res.a);
   }
-  { const wk=Math.floor(doc.g/3); for(const t of teams){ trainTeam(t,r0,wk); out.changed.add(t.i); } }
+  { const wk=Math.floor(doc.g/3); for(const t of teams){ trainTeam(t,r0,wk); pushReport(t,doc); out.changed.add(t.i); } }
   doc.live=false;
   league.g++; league.r++; league.ph=0;
   setClock(rnOf(league)); ensureAges(teams, rnOf(league)).forEach(i=>out.changed.add(i));

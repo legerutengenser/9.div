@@ -344,6 +344,7 @@ th.sortable:hover{color:var(--ink)}
 .savebar span{flex:1;min-width:200px}
 .savebar.dirty{background:color-mix(in srgb,var(--accent) 22%,var(--surface));border-color:var(--accent);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .formassign{grid-column:1/-1;margin-top:8px;font-size:14px}.formassign summary{cursor:pointer;color:var(--accent-ink,var(--ink));font-weight:600}.fagrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:8px}
+.trrep{border-top:1px solid var(--line);padding:8px 0}.trrep summary{cursor:pointer}.trsum{margin-left:8px}.trrow{padding:3px 0;font-size:14px}.phist{max-height:260px;overflow:auto}
 
 </style>
 </head>
@@ -689,6 +690,19 @@ function lineupRoles(team){ const m={}; const slots=slotsOf(team.lineup); team.l
 function trainShare(team){ const tr=team.training||{}; const ks=[tr.a,tr.b].filter(Boolean); return {ks, share: ks.length===2?0.6:1}; }
 const TRAIN_SCALE = 0.48;   // per uke; trenes i tre like deler, en etter hver kamp
 function trainingRate(p, k, role, inLine, share){ return TRAIN_SCALE*REL[k][role]*(inLine?1:0.5)*share*ageTrainF(p.a); }
+/* treningsrapport: endringer samles i team.tp og skrives som en rapport i team.trh etter hver kamp */
+function recSk(team,p,k,from,to){
+  if(!team.owner) return; const tp=team.tp||(team.tp={ch:[],fm:[]}); let e=tp.ch.find(x=>x.i===p.id&&x.k===k);
+  if(e){ e.b=to; if(e.a===e.b) tp.ch.splice(tp.ch.indexOf(e),1); } else if(from!==to) tp.ch.push({i:p.id,p:p.n,k,a:from,b:to});
+}
+function recForm(team,p,from,to){
+  if(!team.owner||from===to) return; const tp=team.tp||(team.tp={ch:[],fm:[]}); tp.fm.push({i:p.id,p:p.n,a:from,b:to});
+}
+function pushReport(team,doc){
+  if(!team.owner){ team.tp=null; return; }
+  const tp=team.tp||{ch:[],fm:[]};
+  team.trh=[{g:doc.g,s:doc.s,r:doc.r,t:doc.t,ch:tp.ch,fm:tp.fm}].concat(team.trh||[]).slice(0,90); team.tp=null;
+}
 function trainTeam(team, r, week){
   const {ks,share}=trainShare(team); if(!ks.length) return;
   ensureLineup(team);
@@ -698,10 +712,10 @@ function trainTeam(team, r, week){
     for(const k of ks){
       const i=SKI[k]; if(p.s[i]>=20) continue;
       p.pr[i] += trainingRate(p,k,role,inLine,share)/3*(0.85+r()*0.3);
-      let up=0;
+      let up=0; const s0=p.s[i];
       while(p.s[i]<20 && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
       if(p.s[i]>=20) p.pr[i]=0;
-      if(up) team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1});
+      if(up){ team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1}); recSk(team,p,k,s0,p.s[i]); }
     }
   }
   team.tl = team.tl.slice(0,24);
@@ -712,7 +726,7 @@ function agingDecline(team, r, week){
     if(p.a<30) continue;
     const base=Math.min(0.045, 0.006*(p.a-29));
     SK.forEach((k,i)=>{
-      if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); }
+      if(p.s[i]>0 && r()<base*DECLINE_W[k]){ p.s[i]--; p.pr[i]=0; team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:-1}); recSk(team,p,k,p.s[i]+1,p.s[i]); }
     });
   }
   team.tl = team.tl.slice(0,24);
@@ -721,7 +735,7 @@ function formDrift(team, r){
   for(const p of team.players){
     const x=r(); let step = x<.25?-1: x>.75?1:0;
     if(p.f>=7 && r()<.3) step=-1; if(p.f<=3 && r()<.3) step=1;
-    p.f=clamp((p.f||5)+step,1,8);
+    const f0=p.f||5; p.f=clamp(f0+step,1,8); recForm(team,p,f0,p.f);
   }
 }
 function aiPlan(team, r, week){
@@ -1282,7 +1296,7 @@ function finishRound(league, teams, doc, names){
     for(const e of res.ev){ if(!GOAL_KINDS[e.k]) continue; const T=(e.s==='h')?Ht:At; const pl=T.players.find(p=>p.id===e.i); if(pl) pl.gl=(pl.gl||0)+1; }
     out.changed.add(res.h); out.changed.add(res.a);
   }
-  { const wk=Math.floor(doc.g/3); for(const t of teams){ trainTeam(t,r0,wk); out.changed.add(t.i); } }
+  { const wk=Math.floor(doc.g/3); for(const t of teams){ trainTeam(t,r0,wk); pushReport(t,doc); out.changed.add(t.i); } }
   doc.live=false;
   league.g++; league.r++; league.ph=0;
   setClock(rnOf(league)); ensureAges(teams, rnOf(league)).forEach(i=>out.changed.add(i));
@@ -1852,7 +1866,7 @@ function viewHome(){
   if(lastR){ res+=`<div class="tablewrap">${lastR.m.map(m=>fxRow(m,t.i)).join('')}</div>`; } else res+=`<div class="empty">Ingen kamper spilt ennå denne sesongen.</div>`;
   res+=`</div>`;
 
-  const tl=(t.tl||[]).slice(0,7); const tr=`<div class="card"><h3>Treningsrapport</h3>${tl.length?`<ul class="timeline" style="grid-template-columns:1fr">${tl.map(x=>`<li style="grid-template-columns:1fr"><span><b>${esc(x.p)}</b> <span class="${x.d>0?'up':'down'}">${x.d>0?'økte':'mistet'}</span> ${E.SK_NAME[x.k]} til ${x.l}</span></li>`).join('')}</ul>`:`<div class="empty">Ingen endringer ennå. Treningen oppdateres etter hver kamp.</div>`}</div>`;
+  const lastRep=(t.trh||[])[0]; const trRows=lastRep?repRows(lastRep):[]; const tr=`<div class="card"><h3>Treningsrapport${lastRep?` <small>runde ${lastRep.r+1}</small>`:''}</h3>${trRows.length?trRows.slice(0,8).map(x=>repLine(x,true)).join('')+(trRows.length>8?`<div class="small muted">+ ${trRows.length-8} spillere til. Se Trening-fanen.</div>`:''):`<div class="empty">${lastRep?'Ingen endringer i siste oppdatering.':'Ingen endringer ennå. Treningen oppdateres etter hver kamp.'}</div>`}</div>`;
   const log=(S.market&&S.market.log||[]).slice(0,6); const nw=`<div class="card"><h3>Transfernytt</h3>${log.length?`<ul class="timeline" style="grid-template-columns:1fr">${log.map(x=>`<li style="grid-template-columns:1fr"><span class="small">${esc(x.t)}</span></li>`).join('')}</ul>`:`<div class="empty">Ingen handler ennå.</div>`}</div>`;
   return `<div class="grid g2">${friendlyNote()}${myM?liveCard(rdoc,myM):nextCard}${tbl}${res}${tr}${nw}</div>`;
 }
@@ -1993,6 +2007,36 @@ function viewSquad(){
   <p class="tiny muted">Trykk på en spiller for detaljer, salg og spesialitet. Alder 17 og eldre kan spille på A-laget. Etter fylte 30 år faller egenskapene gradvis.</p>`;
 }
 
+/* ---- treningsrapporter ---- */
+const dArr=(a,b,fl)=>`<span class="${b>a?'up':'down'}">${fl?'Form':''}${fl?' ':''}${a} → ${b}</span>`;
+function repRows(r,pid){
+  const by={}; const get=(i,p)=>by[i]||(by[i]={p,s:[],f:null});
+  (r.ch||[]).forEach(x=>{ if(pid&&x.i!==pid) return; get(x.i,x.p).s.push(x); });
+  (r.fm||[]).forEach(x=>{ if(pid&&x.i!==pid) return; get(x.i,x.p).f=x; });
+  const rows=Object.values(by); rows.sort((a,b)=>b.s.length-a.s.length||a.p.localeCompare(b.p,'nb'));
+  return rows;
+}
+function repLine(row,showName){
+  const parts=row.s.map(x=>`${E.SK_NAME[x.k]} ${dArr(x.a,x.b)}`);
+  if(row.f) parts.push(dArr(row.f.a,row.f.b,true));
+  return `<div class="trrow">${showName?`<b>${esc(row.p)}</b> `:''}${parts.join(' <span class="muted">·</span> ')}</div>`;
+}
+function trainReports(t){
+  const h=t.trh||[]; if(!h.length) return `<div class="card"><h3>Treningsrapporter</h3><div class="empty">Ingen rapporter ennå. Etter hver kamp lages en rapport som viser hvem som har fått høyere eller lavere skill, og endringer i form (form oppdateres én gang i uka).</div></div>`;
+  const n=S.trN||8; const list=h.slice(0,n);
+  return `<div class="card"><h3>Treningsrapporter <small>${h.length} lagret</small></h3><p class="small muted" style="margin:0 0 12px">Endringer siden forrige treningsoppdatering. Rapportene lagres over tid.</p>${list.map((r,i)=>{
+    const rows=repRows(r); const up=(r.ch||[]).filter(x=>x.b>x.a).length, dn=(r.ch||[]).length-up;
+    const sum=`${up?`<span class="up">+${up}</span> `:''}${dn?`<span class="down">−${dn}</span> `:''}${(r.fm||[]).length?`<span class="muted">${(up||dn)?'· ':''}${(r.fm||[]).length} formendringer</span>`:''}`||'<span class="muted">Ingen endringer</span>';
+    return `<details class="trrep"${i===0?' open':''}><summary><b>Runde ${r.r+1}</b> <span class="muted small">· sesong ${r.s} · ${fmtTime(r.t)}</span> <span class="trsum small">${sum}</span></summary>${rows.length?rows.map(x=>repLine(x,true)).join(''):'<div class="small muted" style="padding:6px 0">Ingen spillere endret seg.</div>'}</details>`; }).join('')}
+  ${h.length>n?`<div class="row" style="margin-top:12px"><button class="btn" data-act="trmore">Vis eldre rapporter</button></div>`:''}</div>`;
+}
+function playerHistory(t,p){
+  const h=(t.trh||[]).map(r=>({r,row:repRows(r,p.id)[0]})).filter(x=>x.row);
+  if(!h.length) return `<p class="small muted" style="margin:0">Ingen utvikling registrert for ${esc(p.n)} ennå. Treningsrapportene lagres fra og med nå.</p>`;
+  const byK={}; h.slice().reverse().forEach(x=>x.row.s.forEach(c=>{ (byK[c.k]=byK[c.k]||[]).push(c); }));
+  const sumK=Object.keys(byK).map(k=>{ const a=byK[k][0].a, b=byK[k][byK[k].length-1].b; return `<span class="chip">${E.SK_NAME[k]} ${dArr(a,b)}</span>`; }).join(' ');
+  return `${sumK?`<div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:wrap">${sumK}</div>`:''}<div class="phist">${h.slice(0,30).map(x=>`<div class="trrow"><span class="muted small">Runde ${x.r.r+1} · ${fmtTime(x.r.t)}</span><br>${repLine(x.row,false)}</div>`).join('')}</div>`;
+}
 function viewTrain(){
   const t=myTeam(); if(!t) return needTeam();
   const tr=t.training||{a:null,b:null}; const {ks,share}=E.trainShare(t); const lu=t.lineup||E.autoLineup(clone(t));
@@ -2010,7 +2054,7 @@ function viewTrain(){
   <div class="card" style="margin-bottom:16px"><div class="row"><label class="f">Hovedtrening<select id="trainA" data-change="trainA">${opt(tr.a,false)}</select></label><label class="f">Ekstra trening<select id="trainB" data-change="trainB">${opt(tr.b,true)}</select></label></div>
   <p class="small muted" style="margin:12px 0 0;max-width:70ch">${ks.length===2?'Med to treningstyper får hver av dem 60 % effekt. Du trener mer totalt, men hver egenskap utvikler seg saktere.':'Med én treningstype får egenskapen full effekt. Lave nivåer går raskt, høye nivåer tar mange uker. Unge spillere lærer mye fortere enn eldre. En 17-åring trener mer enn dobbelt så fort som en på 25.'}</p></div>
   <div class="grid g2" style="align-items:start"><div class="tablewrap" style="grid-column:1/-1"><table><thead><tr><th>Spiller</th>${ks.map(k=>`<th>${E.SK_NAME[k]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>${rel}
-  <div class="card"><h3>Siste endringer</h3>${log.length?`<ul class="timeline" style="grid-template-columns:1fr">${log.map(x=>`<li style="grid-template-columns:1fr"><span class="small"><b>${esc(x.p)}</b> <span class="${x.d>0?'up':'down'}">${x.d>0?'+1':'−1'}</span> ${E.SK_NAME[x.k]} (nivå ${x.l})</span></li>`).join('')}</ul>`:`<div class="empty">Ingen endringer ennå.</div>`}</div></div>`;
+  ${trainReports(t)}</div>`;
 }
 
 function marketRows(items){
@@ -2354,6 +2398,7 @@ function ownModal(p,t,ctx){
   openModal(`<button class="btn sm x" data-act="closemodal">Lukk</button><h3>${p.no!=null?`<span class="nr">${p.no}</span> `:''}${esc(p.n)}</h3><p class="muted" style="margin:4px 0 14px">${ageStr(p)} · ${roleOf(p)} · form ${p.f||5} av 8 (${FORM_LABEL[p.f||5].toLowerCase()}) · ${p.gl||0} mål denne sesongen</p>
   ${p.sp?`<p class="small"><span class="spec">${E.SPEC[p.sp]}</span> ${esc(E.SPEC_INFO[p.sp])}</p>`:''}
   <div class="ratings" style="margin:12px 0">${skillRows}</div>
+  <details class="trrep" style="margin:10px 0"><summary><b>Utvikling over tid</b></summary><div style="padding-top:8px">${playerHistory(t,p)}</div></details>
   <dl class="kv small"><dt>Temperament</dt><dd>${E.tmLabel(E.tmOf(p))} (${E.tmOf(p)} av 10)</dd><dt>Lederegenskap</dt><dd>${E.ldLabel(E.ldOf(p))} (${E.ldOf(p)} av 10)</dd><dt>Erfaring</dt><dd>${E.expLabel(E.expLevel(p))} (${(p.xp||0)} kamper)</dd><dt>Spillestil</dt><dd>${p.sy?`${E.STYLE[p.sy]}. ${esc(E.STYLE_INFO[p.sy])}`:'Ingen spesiell'}</dd><dt>Som kaptein</dt><dd>${E.capLabel(p)}</dd><dt>Gule kort</dt><dd>${p.yc||0} av 3${isSus(p)?' · <b>utestengt neste kamp</b>':''}</dd></dl>
   ${lineupCtx?`<div class="row" style="margin-top:14px"><button class="btn primary" data-act="assignmodal" data-id="${p.id}"${luLocked()||isSus(p)?' disabled':''}>Sett inn som ${esc(slotName.toLowerCase())}</button><span class="muted small">Du kan også dra spilleren til en plass på banen.</span></div>`:`<dl class="kv small" style="margin-top:10px"><dt>Verdi</dt><dd>${kr(v)}</dd><dt>Lønn per uke</dt><dd>${kr(E.wage(p))}</dd><dt>Lynsalg til speidere</dt><dd>${kr(Math.round(v*0.45/1000)*1000)}</dd></dl>
   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
@@ -2420,6 +2465,7 @@ const actions={
     lu.subs.push({m:60,c:'always',out:lu.sl[oi],inn:bench[0].id,as:null}); saveLU(lu); },
   chgadd(){ const t=myTeam(); const lu=clone(curLU(t)); lu.chg=lu.chg||[]; if(lu.chg.length>=4) return; lu.chg.push({m:60,c:'nolead',k:'tac',v:'wings'}); saveLU(lu); },
   chgdel(el){ const t=myTeam(); const lu=clone(curLU(t)); (lu.chg||[]).splice(+el.dataset.n,1); saveLU(lu); },
+  trmore(){ S.trN=(S.trN||8)+12; render(); },
   ssort(el){ S.sortKey=el.dataset.k; render(); },
   msort(el){ S.mf.sort=el.dataset.k; render(); },
   lsortk(el){ S.lsort='sk:'+el.dataset.k; render(); },
