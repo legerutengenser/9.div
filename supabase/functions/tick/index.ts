@@ -148,7 +148,7 @@ function ageAt(p, rn){ return p.bn==null ? p.a : Math.floor((rn-p.bn)/AGE_ROUNDS
 function ageParts(p, rn){ if(p.bn==null) return {y:p.a, d:null}; const x=rn-p.bn; return {y:Math.floor(x/AGE_ROUNDS), d:Math.floor(((x%AGE_ROUNDS)+AGE_ROUNDS)%AGE_ROUNDS*7/3)}; }
 function ensureAges(teams, rn){
   const ch=new Set();
-  for(const t of teams) for(const p of t.players){
+  for(const t of teams) for(const p of t.players.concat(t.yp||[])){
     if(p.bn==null){ p.bn = rn - p.a*AGE_ROUNDS - (hashSeed(p.id)%AGE_ROUNDS); ch.add(t.i); }
     const a=ageAt(p,rn); if(a!==p.a){ p.a=a; ch.add(t.i); }
   }
@@ -354,11 +354,11 @@ function trainTeam(team, r, week){
   for(const p of team.players){
     const inLine=!!roles[p.id]; const role=roles[p.id]||bestRole(p);
     for(const k of ks){
-      const i=SKI[k]; if(p.s[i]>=20) continue;
+      const i=SKI[k]; const capS=p.mx?Math.min(20,p.mx[i]):20; if(p.s[i]>=capS){ p.pr[i]=0; continue; }
       p.pr[i] += trainingRate(p,k,role,inLine,share)/3*(0.85+r()*0.3);
       let up=0; const s0=p.s[i];
-      while(p.s[i]<20 && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
-      if(p.s[i]>=20) p.pr[i]=0;
+      while(p.s[i]<capS && p.pr[i]>=cost(p.s[i])){ p.pr[i]-=cost(p.s[i]); p.s[i]++; up++; }
+      if(p.s[i]>=capS) p.pr[i]=0;
       if(up){ team.tl.unshift({w:week,p:p.n,k,l:p.s[i],d:1}); recSk(team,p,k,s0,p.s[i]); }
     }
   }
@@ -777,8 +777,8 @@ function simulateFriendly(Ht, At, luH, luA, id){
 }
 
 /* ---------- terminliste ---------- */
-function makeFixtures(season){
-  const r=rngFrom('fx-'+season); let arr=[]; for(let i=0;i<N_TEAMS;i++) arr.push(i);
+function makeFixtures(season, pre){
+  const r=rngFrom((pre||'fx-')+season); let arr=[]; for(let i=0;i<N_TEAMS;i++) arr.push(i);
   for(let i=arr.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
   const first=[];
   for(let rd=0;rd<N_TEAMS-1;rd++){
@@ -821,9 +821,114 @@ function createLeague(now){
   const anchor=mondayOf(now);
   const g0=firstSlotAfter(anchor, now+90*60000);
   const league={v:1, created:now, anchor, g:g0, g0, s:1, r:0, fx:makeFixtures(1), tb:emptyTable(), hist:[], wk:Math.floor(g0/3)};
+  initYouth(league, teams, names, now);
   const market=newMarketDoc();
   refreshMarket(market, teams, r, league.wk, names);
   return {league, teams, market};
+}
+
+/* ---------- ungdomslag ---------- */
+const YDAYS=[0,3,5];            // mandag, torsdag, lørdag (hovedlaget: tirsdag, fredag, søndag)
+const YMAX=20, YMIN=11, Y_OUT_AGE=19;
+const SCOUT_TYPES={any:'Alle typer', GK:'Keeper', CB:'Midtstopper', WB:'Back', IM:'Midtbane', W:'Ving', FW:'Spiss'};
+const CAPW={GK:[1,.25,.2,.25,.2,.15,.5],CB:[.1,1,.45,.35,.2,.2,.45],WB:[.1,1,.45,.5,.6,.2,.35],IM:[.1,.55,1,.85,.3,.45,.5],W:[.1,.28,.55,.7,1,.5,.4],FW:[.1,.3,.4,.5,.3,1,.4]};
+function yslotTime(anchor, g){
+  const wk=Math.floor(g/3), day=YDAYS[g%3];
+  const dt=new Date(Date.UTC(anchor.y,anchor.m-1,anchor.d+7*wk+day));
+  return osloToUtc(dt.getUTCFullYear(), dt.getUTCMonth()+1, dt.getUTCDate(), KICKOFF_H, 0);
+}
+function yFirstAfter(anchor, ms){ let g=0; while(yslotTime(anchor,g)<=ms) g++; return g; }
+const qBand=q=>q<2.5?'lavt':q<5.5?'middels':q<7.5?'høyt':'svært høyt';
+/* en ungdomsspiller: faktiske skills er lave, og talentet (q 0-10) bestemmer taket mx per egenskap så lenge han er på ungdomslaget */
+function genProspect(r, role, names, age, q){
+  if(q==null) q=clamp(Math.pow(r(),1.6)*10,0,10);
+  const ab=clamp(1.0+(age-15)*0.55+q*0.14+normal(r)*0.5,0.8,5.5);
+  const p=genPlayer(r,role,ab,age,names);
+  const C=4+q*1.6, w=CAPW[role];
+  p.mx=w.map(wi=>clamp(Math.round(2+(C-2)*wi+normal(r)*0.8),1,20));
+  p.s=p.s.map((v,i)=>Math.min(v,p.mx[i]));
+  p.q=Math.round(q*10)/10; p.xp=ri(r,0,4); p.rl=role;
+  return p;
+}
+/* speiderne røper bare noe av det de vet: tre opplysninger per spiller, ulike for hver */
+function prospectFacts(r, p, role, type){
+  const w=CAPW[role]; const kinds=[['age',2.6],['cur',2],['max',2.6],['spec',1.3],['pot',1.2],['role',type==='any'?1.2:0.15]];
+  const out=[]; const left=kinds.slice();
+  while(out.length<3 && left.length){
+    const k=wpick(r,left,x=>x[1]); left.splice(left.indexOf(k),1);
+    if(k[0]==='age') out.push({k:'age',v:p.a});
+    else if(k[0]==='cur'){ const i=wpick(r,SK.map((_,j)=>j),j=>w[j]+0.1); out.push({k:'cur',sk:SK[i],v:p.s[i]}); }
+    else if(k[0]==='max'){ const i=wpick(r,SK.map((_,j)=>j),j=>w[j]*w[j]+0.02); out.push({k:'max',sk:SK[i],v:p.mx[i]}); }
+    else if(k[0]==='spec') out.push({k:'spec',v:p.sp||null});
+    else if(k[0]==='pot') out.push({k:'pot',v:qBand(clamp(p.q+normal(r)*0.9,0,10))});
+    else out.push({k:'role',v:role});
+  }
+  return out;
+}
+function makeOffer(r, t, names, week){
+  const type=t.ys||'any'; const c=[];
+  for(let i=0;i<3;i++){
+    const role = type==='any' ? pick(r,ROLES) : (r()<0.8?type:pick(r,ROLES));
+    const age=wpick(r,[15,16,17],a=>a===15?.3:a===16?.4:.3);
+    const p=genProspect(r,role,names,age); c.push({pl:p, f:prospectFacts(r,p,role,type)});
+  }
+  t.yo={w:week, c, ch:null};
+}
+function ylog(t, text){ t.yl=[{t:text}].concat(t.yl||[]).slice(0,14); }
+function youthPseudo(t){ const o={...t, name:t.name, players:t.yp, owner:'y', ai:null, lus:null, lineup:null, tl:[], st:{}}; o.lineup=autoLineup(o); return o; }
+function initYouth(league, teams, names, nowMs){
+  setClock(rnOf(league)); const r=rngFrom('yinit-'+league.created);
+  const g0=yFirstAfter(league.anchor, nowMs);
+  league.y={g:g0, g0, s:1, r:0, fx:makeFixtures(1,'yfx-'), tb:emptyTable(), hist:[], res:[]};
+  const wk=Math.floor(g0/3);
+  for(const t of teams){
+    t.yp=YROLES.map(role=>genProspect(r,role,names,wpick(r,[15,16,17,18],a=>a===15?.22:a===16?.3:a===17?.28:.2)));
+    t.ys=t.ys||'any'; t.yl=[]; t.yo=null;
+    if(t.owner) makeOffer(r,t,names,wk); else t.yo={w:wk,c:[],ch:-1};
+  }
+}
+const YROLES=['GK','GK','CB','CB','CB','WB','WB','IM','IM','IM','W','W','FW','FW','FW'];
+/* en tilsynelatende vanlig spiller på hovedlaget (taket fjernes) */
+function promoteYouth(t, p){ delete p.mx; delete p.rl; t.players.push(p); }
+function youthMaint(t, r, names, wk, rn){
+  const ch=[];
+  for(const p of t.yp){ const a=ageAt(p,rn); if(a!==p.a) p.a=a; }
+  // 19 år: ut av ungdomslaget
+  for(const p of t.yp.filter(x=>x.a>=Y_OUT_AGE)){
+    t.yp=t.yp.filter(x=>x!==p);
+    if(t.owner || p.q>=4.5){ promoteYouth(t,p); ylog(t,`${p.n} ble 19 år og er flyttet opp til hovedlaget uten tak på skills.`); }
+    else ylog(t,`${p.n} ble 19 år og forlot klubben.`);
+  }
+  while(t.yp.length<YMIN){ const q=r()*2.5; const p=genProspect(r,pick(r,YROLES),names,wpick(r,[15,16,17],a=>a===15?.3:a===16?.4:.3),q); t.yp.push(p); }
+  // ny uke: nytt speidertilbud (avvist/ubrukt tilbud forsvinner)
+  if(!t.yo || t.yo.w!==wk || (t.owner && t.yo.ch===-1)){
+    if(t.owner) makeOffer(r,t,names,wk);
+    else {
+      makeOffer(r,t,names,wk); const pick1=t.yo.c.slice().sort((a,b)=>b.pl.q-a.pl.q)[0];
+      if(t.yp.length>=YMAX){ const worst=t.yp.slice().sort((a,b)=>a.q-b.q)[0]; t.yp=t.yp.filter(x=>x!==worst); }
+      t.yp.push(pick1.pl); t.yo={w:wk,c:[],ch:-1};
+    }
+  }
+}
+function youthRound(league, teams, names){
+  const Y=league.y; const g=Y.g; const wk=Math.floor(g/3); const rn=rnOf(league); setClock(rn);
+  const r0=rngFrom('yslot-'+g+'-'+Y.s); const changed=new Set();
+  for(const t of teams){ youthMaint(t,r0,names,wk,rn); changed.add(t.i); }
+  const kick=yslotTime(league.anchor,g); const rd=[];
+  for(const [h,a] of Y.fx[Y.r]){
+    const Ht=youthPseudo(teams[h]), At=youthPseudo(teams[a]);
+    const res=simulateMatch(Ht,At,rngFrom(`ym-${Y.s}-${Y.r}-${h}-${a}`));
+    const sc=res.ev.filter(ev=>GOAL_KINDS[ev.k]).map(ev=>[Math.round((ev.t||0)>res.L1?(ev.t||0)-15:(ev.t||0)),ev.p||'',ev.s]);
+    rd.push([h,a,res.hg,res.ag,sc]);
+    const th=Y.tb[h], ta=Y.tb[a]; th[0]++; ta[0]++; th[4]+=res.hg; th[5]+=res.ag; ta[4]+=res.ag; ta[5]+=res.hg;
+    if(res.hg>res.ag){ th[1]++; ta[3]++; th[6]+=3; } else if(res.hg<res.ag){ ta[1]++; th[3]++; ta[6]+=3; } else { th[2]++; ta[2]++; th[6]++; ta[6]++; }
+  }
+  for(const t of teams){ const ps=youthPseudo(t); trainTeam(ps,r0,wk); t.yp.forEach(p=>{ if(p.f==null) p.f=5; }); }
+  Y.res=[{s:Y.s,r:Y.r,g,t:kick,m:rd}].concat(Y.res||[]).slice(0,12);
+  Y.g++; Y.r++;
+  if(Y.r>=ROUNDS){ const order=tableOrder(Y.tb); const c=order[0]; Y.hist=(Y.hist||[]).concat([{s:Y.s,t:c.t,name:teams[c.t].name,pts:c.pts}]).slice(-20); Y.s++; Y.r=0; Y.fx=makeFixtures(Y.s,'yfx-'); Y.tb=emptyTable(); }
+  teams.forEach(t=>changed.add(t.i));
+  return changed;
 }
 
 /* ---------- marked ---------- */
@@ -981,7 +1086,7 @@ return {
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
   slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
-  STYLE, STYLE_INFO, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+  STYLE, STYLE_INFO, YDAYS, YMAX, YMIN, SCOUT_TYPES, yslotTime, yFirstAfter, initYouth, youthRound, makeOffer, promoteYouth, ylog, youthPseudo, qBand, genProspect, CAPW, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
 
@@ -1035,6 +1140,7 @@ function makeStore({db, uid, now}){
     if(!L.ph) return t >= E.slotTime(L.anchor, L.g);
     return doc ? t >= doc.end : false;
   }
+  const ydue = L => !L.y || now() >= E.yslotTime(L.anchor, L.y.g);
   /* ----- treningskamper ----- */
   const frRef = id => db.doc('friendlies/'+id);
   const FR_ACTIVE = ['open','ready','live'];
@@ -1101,18 +1207,19 @@ function makeStore({db, uid, now}){
     const L0 = first.data();
     let d0=null;
     if(L0.ph){ const s=await db.doc('rounds/s'+L0.s+'r'+L0.r).get(); d0=s.exists?s.data():null; }
-    if(!dueNow(L0,d0)) return {ran:0};
+    if(!dueNow(L0,d0) && !ydue(L0)) return {ran:0};
     const lease = await db.doc('locks/tick').acquire({holder:hid, ttlMs:60000});
     if(!lease.acquired) return {ran:0, busy:true};
-    const league = clone((await refs.league.get()).data());
+    const league = clone((await refs.league.get()).data()); const changed0=new Set();
     const teams = await readAllTeams();
     if(teams.some(t=>!t)) fail('Mangler lagdata.');
     const orig = teams.map(t=>clone(t));
     const msnap = await refs.market.get();
     const market = msnap.exists ? clone(msnap.data()) : E.newMarketDoc();
-    const names = new Set(); teams.forEach(t=>t.players.forEach(p=>names.add(p.n)));
+    const names = new Set(); teams.forEach(t=>{ t.players.forEach(p=>names.add(p.n)); (t.yp||[]).forEach(p=>names.add(p.n)); ((t.yo&&t.yo.c)||[]).forEach(c=>names.add(c.pl.n)); });
+    let initY=false; if(!league.y){ E.initYouth(league,teams,names,now()); teams.forEach(t=>changed0.add(t.i)); initY=true; }
     let doc=null; if(league.ph){ const s=await db.doc('rounds/s'+league.s+'r'+league.r).get(); doc=s.exists?clone(s.data()):null; if(!doc) league.ph=0; }
-    const docs=new Map(); const changed=new Set(); let marketChanged=false; let started=0, finished=0; let guard=0;
+    const docs=new Map(); const changed=new Set(changed0); let marketChanged=false; let started=0, finished=0; let guard=0;
     while(guard++<200){
       if(!league.ph){
         if(now() < E.slotTime(league.anchor, league.g)) break;
@@ -1124,7 +1231,8 @@ function makeStore({db, uid, now}){
         docs.set(roundId(doc),doc); out.changed.forEach(i=>changed.add(i)); finished++; doc=null;
       }
     }
-    if(!started && !finished) return {ran:0};
+    let yran=0; { let g2=0; while(g2++<400 && league.y && now()>=E.yslotTime(league.anchor,league.y.g)){ E.youthRound(league,teams,names).forEach(i=>changed.add(i)); yran++; } }
+    if(!started && !finished && !yran && !initY) return {ran:0};
     for(const d of docs.values()) await retry(()=>db.doc(roundId(d)).set(d));
     for(const i of changed){
       const diff={}; const a=teams[i], b=orig[i];
@@ -1133,7 +1241,7 @@ function makeStore({db, uid, now}){
     }
     if(marketChanged) await retry(()=>refs.market.set(market));
     await retry(()=>refs.league.set(league));
-    return {ran:finished, started};
+    return {ran:finished, started, youth:yran};
   }
   async function lineupLocked(){
     const s=await refs.league.get(); if(!s.exists) return false;
@@ -1156,6 +1264,10 @@ function makeStore({db, uid, now}){
       if(t.owner) fail('Laget er allerede tatt over av en annen manager.');
       const upd={owner:uid, ownerSince:now(), ai:{pref:(t.ai&&t.ai.pref)||'4-4-2', until:0}};
       if(newName!=null && String(newName).trim()!==t.name){ const nm=cleanName(newName,teams,i); upd.name=nm; upd.short=shortOf(nm); }
+      // ny manager får et speidertilbud med en gang
+      try{ const L=(await refs.league.get()).data(); if(L&&L.y&&t.yp&&(!t.yo||t.yo.ch===-1||!t.yo.c||!t.yo.c.length)){
+        const names=new Set(); teams.forEach(x=>{ x.players.forEach(p=>names.add(p.n)); (x.yp||[]).forEach(p=>names.add(p.n)); });
+        const c=clone(t); c.owner=uid; E.setClock(E.rnOf(L)); E.makeOffer(E.rngFrom('claim-'+i+'-'+now()),c,names,Math.floor(L.y.g/3)); upd.yo=c.yo; } }catch(e){}
       await retry(()=>teamRef(i).update(upd));
     });
   }
@@ -1196,6 +1308,44 @@ function makeStore({db, uid, now}){
   async function renameTeam(i, name){
     const teams=await readAllTeams(); name=cleanName(name,teams,i);
     await retry(()=>teamRef(i).update({name, short:shortOf(name)}));
+  }
+
+  /* ----- ungdomslag ----- */
+  async function setScout(ti, type){
+    if(!E.SCOUT_TYPES[type]) fail('Ukjent spillertype.');
+    const t=(await teamRef(ti).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+    await retry(()=>teamRef(ti).update({ys:type}));
+  }
+  async function pickYouth(ti, idx){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const o=t.yo; if(!o || !o.c || !o.c[idx]) fail('Fant ikke spilleren i speidernes forslag.');
+      if(o.ch!=null && o.ch>=0) fail('Du har allerede valgt en spiller denne uken.');
+      if((t.yp||[]).length>=E.YMAX) fail('Ungdomslaget er fullt (maks '+E.YMAX+' spillere). Frigi eller trekk opp en spiller først.');
+      const p=o.c[idx].pl; t.yp=(t.yp||[]).concat([p]); o.ch=idx; E.ylog(t,`${p.n} (${p.a} år) kom inn på ungdomslaget fra speiderne.`);
+      await retry(()=>teamRef(ti).update({yp:t.yp, yo:o, yl:t.yl}));
+      return p;
+    });
+  }
+  async function promoteYouth(ti, pid){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const p=(t.yp||[]).find(x=>x.id===pid); if(!p) fail('Spilleren finnes ikke på ungdomslaget.');
+      if(t.players.length>=E.SQUAD_MAX) fail('Troppen er full (maks '+E.SQUAD_MAX+' spillere).');
+      if((t.yp||[]).length<=E.YMIN) fail('Ungdomslaget må ha minst '+E.YMIN+' spillere.');
+      t.yp=t.yp.filter(x=>x.id!==pid); E.promoteYouth(t,p); E.ylog(t,`${p.n} ble trukket opp til hovedlaget.`);
+      await retry(()=>teamRef(ti).update({yp:t.yp, players:t.players, yl:t.yl}));
+      return p;
+    });
+  }
+  async function releaseYouth(ti, pid){
+    return withLease("market", 2500, async ()=>{
+      const t=(await teamRef(ti).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
+      const p=(t.yp||[]).find(x=>x.id===pid); if(!p) fail('Spilleren finnes ikke på ungdomslaget.');
+      if(t.yp.length<=E.YMIN) fail('Ungdomslaget må ha minst '+E.YMIN+' spillere.');
+      t.yp=t.yp.filter(x=>x.id!==pid); E.ylog(t,`${p.n} forlot ungdomslaget.`);
+      await retry(()=>teamRef(ti).update({yp:t.yp, yl:t.yl}));
+    });
   }
 
   /* ----- marked ----- */
@@ -1265,7 +1415,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, setScout, pickYouth, promoteYouth, releaseYouth, hid };
 }
 
 /* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */
