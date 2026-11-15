@@ -435,7 +435,7 @@ function aiSubs(team, lu, by, sus){
 function effLineup(team){
   ensureLineup(team);
   const lu=JSON.parse(JSON.stringify(team.lineup)); const by=mapById(team.players);
-  const sus=new Set(team.players.filter(p=>(p.sus||0)>0).map(p=>p.id));
+  const sus=new Set(team.players.filter(p=>(p.sus||0)>0||(p.inj||0)>0).map(p=>p.id));
   const slots=slotsOf(lu); const taken=new Set(lu.sl.filter(id=>id&&!sus.has(id)));
   slots.map((s,i)=>i).sort((a,b)=>SLOT_ORDER[slots[a]]-SLOT_ORDER[slots[b]]).forEach(i=>{
     if(lu.sl[i] && !sus.has(lu.sl[i])) return;
@@ -770,7 +770,7 @@ function simulateMatch(Ht, At, r){
 
 /* ---------- treningskamp: bruker godkjente oppstillinger, uten følger for tabell, kort og utestengelse ---------- */
 function simulateFriendly(Ht, At, luH, luA, id){
-  const mk=(T,lu)=>({...T, players:T.players.map(p=>({...p, sus:0})), lineup: lu?JSON.parse(JSON.stringify(lu)):JSON.parse(JSON.stringify(T.lineup||null))});
+  const mk=(T,lu)=>({...T, players:T.players.map(p=>({...p, sus:0, inj:0})), lineup: lu?JSON.parse(JSON.stringify(lu)):JSON.parse(JSON.stringify(T.lineup||null))});
   const H=mk(Ht,luH), A=mk(At,luA);
   const res=simulateMatch(H,A,rngFrom('fr-'+id));
   return Object.assign({h:Ht.i,a:At.i},res);
@@ -852,17 +852,17 @@ function genProspect(r, role, names, age, q){
 }
 /* speiderne røper bare noe av det de vet: tre opplysninger per spiller, ulike for hver */
 function prospectFacts(r, p, role, type){
-  const w=CAPW[role]; const kinds=[['age',2.6],['cur',2],['max',2.6],['spec',1.3],['pot',1.2],['role',type==='any'?1.2:0.15]];
-  const out=[]; const left=kinds.slice();
-  while(out.length<3 && left.length){
-    const k=wpick(r,left,x=>x[1]); left.splice(left.indexOf(k),1);
-    if(k[0]==='age') out.push({k:'age',v:p.a});
-    else if(k[0]==='cur'){ const i=wpick(r,SK.map((_,j)=>j),j=>w[j]+0.1); out.push({k:'cur',sk:SK[i],v:p.s[i]}); }
-    else if(k[0]==='max'){ const i=wpick(r,SK.map((_,j)=>j),j=>w[j]*w[j]+0.02); out.push({k:'max',sk:SK[i],v:p.mx[i]}); }
-    else if(k[0]==='spec') out.push({k:'spec',v:p.sp||null});
-    else if(k[0]==='pot') out.push({k:'pot',v:qBand(clamp(p.q+normal(r)*0.9,0,10))});
-    else out.push({k:'role',v:role});
-  }
+  const w=CAPW[role]; const out=[{k:'age',v:p.a}];
+  const best=(arr)=>{ const ix=SK.map((_,j)=>j).sort((a,b)=>arr[b]*(w[b]+0.3)-arr[a]*(w[a]+0.3)); return ix[0]; };
+  const good=(arr)=>{ const ix=SK.map((_,j)=>j).sort((a,b)=>arr[b]*(w[b]+0.3)-arr[a]*(w[a]+0.3)); return r()<0.7?ix[0]:ix[1]; };
+  const first=r()<0.5?'cur':'max'; const arr=first==='cur'?p.s:p.mx; const gi=good(arr);
+  out.push({k:first,sk:SK[gi],v:arr[gi]});
+  const kinds=[['cur',1.6],['max',1.6],['spec',1.3],['pot',1.2],['role',type==='any'?1.2:0.15]];
+  const k=wpick(r,kinds,x=>x[1]);
+  if(k[0]==='cur'||k[0]==='max'){ const a2=k[0]==='cur'?p.s:p.mx; let i2=wpick(r,SK.map((_,j)=>j),j=>w[j]+0.1); if(k[0]===first&&i2===gi) i2=(gi+1)%SK.length; out.push({k:k[0],sk:SK[i2],v:a2[i2]}); }
+  else if(k[0]==='spec') out.push({k:'spec',v:p.sp||null});
+  else if(k[0]==='pot') out.push({k:'pot',v:qBand(clamp(p.q+normal(r)*0.9,0,10))});
+  else out.push({k:'role',v:role});
   return out;
 }
 function makeOffer(r, t, names, week){
@@ -1101,6 +1101,7 @@ function simulateRound(league, teams, market, names){
   out.doc=doc;
   return out;
 }
+const INJ_P=0.005, INJ_W=[30,24,18,13,9,6];   // sjanse per spiller per kamp, og vekt for 1–6 kamper ute
 function finishRound(league, teams, doc, names){
   const r0=rngFrom('fin-'+doc.g+'-'+league.s);
   const out={changed:new Set(), notes:[], rolled:false};
@@ -1113,8 +1114,11 @@ function finishRound(league, teams, doc, names){
     else { th[2]++; ta[2]++; th[6]++; ta[6]++; }
     Ht.money+=GATE_HOME;
     for(const [T,code] of [[Ht,'h'],[At,'a']]){
-      T.players.forEach(p=>{ if((p.sus||0)>0) p.sus--; });
+      T.players.forEach(p=>{ if((p.sus||0)>0) p.sus--; if((p.inj||0)>0) p.inj--; });
       for(const id of ((res.pl&&res.pl[code])||[])){ const p=T.players.find(x=>x.id===id); if(p) p.xp=(p.xp||0)+1; }
+      for(const id of ((res.pl&&res.pl[code])||[])){ const p=T.players.find(x=>x.id===id); if(!p||(p.inj||0)>0||r0()>=INJ_P) continue;
+        const x=r0()*INJ_W.reduce((a,b)=>a+b,0); let acc=0,k=1; for(let q=0;q<INJ_W.length;q++){ acc+=INJ_W[q]; if(x<acc){ k=q+1; break; } }
+        p.inj=k; (res.inj=res.inj||[]).push({s:code,i:p.id,n:p.n,k}); T.ij=[{r:doc.r,s:league.s,i:p.id,n:p.n,k}].concat(T.ij||[]).slice(0,8); }
       for(const c of (res.cd||[])){ if(c.s!==code) continue; const p=T.players.find(x=>x.id===c.i); if(!p) continue;
         if(c.k==='r') p.sus=1; else { p.yc=(p.yc||0)+1; if(p.yc>=3){ p.sus=1; p.yc=0; } } }
     }
@@ -1383,6 +1387,12 @@ function makeStore({db, uid, now}){
   }
 
   /* ----- ungdomslag ----- */
+  async function renameYouth(i, name){
+    const teams=await readAllTeams(); const t=teams[i]; if(!t||t.owner!==uid) fail('Du styrer ikke dette laget.');
+    name=String(name||'').trim().replace(/\s+/g,' ').slice(0,28); if(name.length<2) fail('Navnet er for kort.');
+    if(teams.some(x=>x && x.i!==i && ((x.yn||x.name+' U19').toLowerCase()===name.toLowerCase()||x.name.toLowerCase()===name.toLowerCase()))) fail('Det navnet brukes allerede av et annet lag.');
+    await retry(()=>teamRef(i).update({yn:name}));
+  }
   async function setScout(ti, type){
     if(!E.SCOUT_TYPES[type]) fail('Ukjent spillertype.');
     const t=(await teamRef(ti).get()).data(); if(t.owner!==uid) fail('Du styrer ikke dette laget.');
@@ -1490,7 +1500,7 @@ function makeStore({db, uid, now}){
     });
   }
 
-  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, saveYouthLineup, saveYouthTraining, setScout, pickYouth, promoteYouth, releaseYouth, hid };
+  return { ensureInit, tick, tickFriendlies, challenge, approveFriendly, cancelFriendly, lineupLocked, claimTeam, releaseTeam, saveLineup, saveRoundLineup, saveTraining, setNumbers, renameTeam, listPlayer, unlistPlayer, quickSell, buy, renameYouth, saveYouthLineup, saveYouthTraining, setScout, pickYouth, promoteYouth, releaseYouth, hid };
 }
 
 /* ===== Supabase-adapter: gir samme db-grensesnitt som spillet bruker (doc/collection/get/set/update/delete/acquire/onSnapshot) ===== */
