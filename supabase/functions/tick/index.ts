@@ -821,7 +821,7 @@ function createLeague(now){
   const anchor=mondayOf(now);
   const g0=firstSlotAfter(anchor, now+90*60000);
   const league={v:1, created:now, anchor, g:g0, g0, s:1, r:0, fx:makeFixtures(1), tb:emptyTable(), hist:[], wk:Math.floor(g0/3)};
-  initYouth(league, teams, names, now); initCup(league, now);
+  initYouth(league, teams, names, now); initCup(league, now); cupDraw(league, teams);
   const market=newMarketDoc();
   refreshMarket(market, teams, r, league.wk, names);
   return {league, teams, market};
@@ -947,7 +947,7 @@ function cupFirstAfter(anchor, ms){ let w=0; while(cupSlotTime(anchor,w)<=ms) w+
 function cupWeek(C){ return C.w0+(C.s-1)*CUP_CYCLE+CUP_STEP*C.k; }
 function initCup(league, nowMs){
   const w0=cupFirstAfter(league.anchor,nowMs);
-  league.c={s:1, k:0, w0, w:w0, ph:0, alive:null, by:[], lost:null, log:[], hist:[], end:0, pend:null};
+  league.c={s:1, k:0, w0, w:w0, ph:0, alive:null, by:[], br:null, W:null, L:null, log:[], hist:[], end:0, pend:null};
 }
 function medal(t, kind, m, s){ t.tr=(t.tr||[]).concat([{k:kind,m,s}]); }
 function shuffleR(r,arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -958,41 +958,60 @@ function shootout(r, hs, as){
   if(h===a){ if(r()<0.5) h++; else a++; }
   return [h,a];
 }
+function cupDraw(league, teams){
+  const C=league.c; if(!C||C.br||C.k!==0||C.ph) return false;
+  const ids=shuffleR(rngFrom('cup-draw-'+C.s), teams.map(t=>t.i));
+  const br=new Array(16).fill(null); const slots=[]; for(let q=0;q<16;q++) if(q!==1 && q!==9) slots.push(q);
+  slots.forEach((q,n)=>{ br[q]=ids[n]; });
+  C.br=br; C.W=[new Array(8).fill(null),new Array(4).fill(null),new Array(2).fill(null),[null]]; C.L=null;
+  C.W[0][0]=br[0]; C.W[0][4]=br[8]; C.by=[br[0],br[8]]; C.alive=ids.slice(); C.log=[];
+  return true;
+}
+function cupPairs(C,k){
+  const out=[];
+  if(k===0){ for(let j=0;j<8;j++){ const a=C.br[2*j], b=C.br[2*j+1]; if(a!=null&&b!=null) out.push({j,h:a,a:b}); } }
+  else if(k<3){ const W=C.W[k-1]; for(let j=0;j<W.length/2;j++) out.push({j,h:W[2*j],a:W[2*j+1]}); }
+  else { out.push({j:0,h:C.W[2][0],a:C.W[2][1]}); if(C.L&&C.L.length===2) out.push({j:1,h:C.L[0],a:C.L[1]}); }
+  return out;
+}
 function cupStart(league, teams){
-  const C=league.c, k=C.k; const r=rngFrom('cup-'+C.s+'-'+k); const kick=cupSlotTime(league.anchor,C.w);
-  let pairs=[]; C.by=C.by||[];
-  if(k===0){ const ids=shuffleR(r,teams.map(t=>t.i)); C.alive=ids.slice(); C.by=ids.slice(0,2); const rest=ids.slice(2); for(let i=0;i+1<rest.length;i+=2) pairs.push([rest[i],rest[i+1]]); }
-  else if(k<3){ const ids=shuffleR(r,C.alive); for(let i=0;i+1<ids.length;i+=2) pairs.push([ids[i],ids[i+1]]); }
-  else { pairs.push([C.alive[0],C.alive[1]]); if(C.lost&&C.lost.length===2) pairs.push([C.lost[0],C.lost[1]]); }
-  const doc={s:'c'+C.s, cs:C.s, r:k, t:kick, live:true, cup:1, by:k===0?C.by.slice():[], m:[]}; const changed=new Set(); const res=[], win=[], lost=[];
-  for(const [h,a] of pairs){
+  const C=league.c, k=C.k; const kick=cupSlotTime(league.anchor,C.w);
+  if(!C.br){ // gamle cuper uten trekning: bygg tre ut fra lagene som er igjen
+    if(k===0) cupDraw(league,teams);
+    else { C.br=new Array(16).fill(null); C.W=[new Array(8).fill(null),new Array(4).fill(null),new Array(2).fill(null),[null]]; const al=(C.alive||[]).slice(); C.W[k-1]=C.W[k-1].map((_,n)=>al[n]!=null?al[n]:null); }
+  }
+  const pairs=cupPairs(C,k);
+  const doc={s:'c'+C.s, cs:C.s, r:k, t:kick, live:true, cup:1, by:k===0?C.by.slice():[], m:[]}; const changed=new Set(); const res=[];
+  for(const {j,h,a} of pairs){
     const Ht=teams[h], At=teams[a];
     for(const T of [Ht,At]) if(!T.owner && !T.lineup) T.lineup=autoLineup(T);
     const m=simulateMatch(Ht,At,rngFrom(`cm-${C.s}-${k}-${h}-${a}`));
     let pen=null;
     if(m.hg===m.ag){ pen=shootout(rngFrom(`cp-${C.s}-${k}-${h}-${a}`),teamStrength(Ht),teamStrength(At)); m.pen=pen; m.ev.push({k:'st',t:m.L1+15+m.L2,tx:`Straffekonkurranse: ${pen[0]}–${pen[1]}. ${pen[0]>pen[1]?Ht.name:At.name} går videre.`}); }
     const hw = pen ? pen[0]>pen[1] : m.hg>m.ag;
-    win.push(hw?h:a); lost.push(hw?a:h); res.push([h,a,m.hg,m.ag,pen]);
-    doc.m.push(Object.assign({h,a},m)); changed.add(h); changed.add(a);
+    res.push({j,h,a,hg:m.hg,ag:m.ag,pen,w:hw?h:a,l:hw?a:h});
+    doc.m.push(Object.assign({h,a,j},m)); changed.add(h); changed.add(a);
   }
   doc.end=kick+Math.max(...doc.m.map(m=>m.L1+15+m.L2))*60000;
-  C.ph=1; C.end=doc.end; C.pend={w:win,l:lost,res};
+  C.ph=1; C.end=doc.end; C.pend={res};
   return {doc, changed};
 }
 function cupFinish(league, teams){
   const C=league.c, k=C.k, P=C.pend; const changed=new Set();
-  C.log=(C.log||[]).concat([{k, by:k===0?C.by.slice():[], m:P.res}]);
-  if(k===0) C.alive=C.by.concat(P.w); else if(k<3) C.alive=P.w.slice();
-  if(k===2) C.lost=P.l.slice();
+  C.log=(C.log||[]).concat([{k, by:k===0?C.by.slice():[], m:P.res.map(x=>[x.h,x.a,x.hg,x.ag,x.pen,x.j])}]);
+  if(k<3){ P.res.forEach(x=>{ C.W[k][x.j]=x.w; }); }
+  if(k===2) C.L=C.W[2].map((_,n)=>{ const x=P.res.find(y=>y.j===n); return x?x.l:null; }).filter(x=>x!=null);
+  if(k<3) C.alive=C.W[k].filter(x=>x!=null);
   if(k===3){
-    const f=P.res[0]; const win=P.w[0], sil=P.l[0]; const bro=P.res[1]?P.w[1]:null;
-    medal(teams[win],'cup','g',C.s); medal(teams[sil],'cup','s',C.s); changed.add(win); changed.add(sil);
-    if(bro!=null){ medal(teams[bro],'cup','b',C.s); changed.add(bro); }
-    C.hist=(C.hist||[]).concat([{s:C.s,g:teams[win].name,sv:teams[sil].name,b:bro!=null?teams[bro].name:null,t:win}]).slice(-20);
-    C.last={s:C.s,log:C.log};
-    C.s++; C.k=0; C.alive=null; C.by=[]; C.lost=null; C.log=[];
+    const f=P.res.find(x=>x.j===0), b=P.res.find(x=>x.j===1);
+    medal(teams[f.w],'cup','g',C.s); medal(teams[f.l],'cup','s',C.s); changed.add(f.w); changed.add(f.l);
+    if(b){ medal(teams[b.w],'cup','b',C.s); changed.add(b.w); }
+    C.hist=(C.hist||[]).concat([{s:C.s,g:teams[f.w].name,sv:teams[f.l].name,b:b?teams[b.w].name:null,t:f.w}]).slice(-20);
+    C.last={s:C.s,log:C.log,br:C.br,W:C.W,L:C.L,fin:[f.w,f.l,b?b.w:null]};
+    C.s++; C.k=0; C.alive=null; C.by=[]; C.br=null; C.W=null; C.L=null; C.log=[];
   } else C.k++;
   C.w=cupWeek(C); C.ph=0; C.pend=null; C.end=0;
+  if(C.k===0) cupDraw(league,teams);
   return changed;
 }
 
@@ -1155,7 +1174,7 @@ return {
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
   slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
-  STYLE, STYLE_INFO, CUP_ROUND_NAME, CUP_ROUNDS, cupSlotTime, initCup, cupStart, cupFinish, cupWeek, YDAYS, YMAX, YMIN, SCOUT_TYPES, yslotTime, yFirstAfter, initYouth, youthRound, makeOffer, promoteYouth, ylog, youthPseudo, qBand, genProspect, CAPW, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+  STYLE, STYLE_INFO, CUP_ROUND_NAME, CUP_ROUNDS, cupSlotTime, initCup, cupDraw, cupPairs, cupStart, cupFinish, cupWeek, YDAYS, YMAX, YMIN, SCOUT_TYPES, yslotTime, yFirstAfter, initYouth, youthRound, makeOffer, promoteYouth, ylog, youthPseudo, qBand, genProspect, CAPW, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
 
@@ -1304,6 +1323,7 @@ function makeStore({db, uid, now}){
     let yran=0; { let g2=0; while(g2++<400 && league.y && now()>=E.yslotTime(league.anchor,league.y.g)){ E.youthRound(league,teams,names).forEach(i=>changed.add(i)); yran++; } }
     let cran=0; const cupDocs=new Map(); let initC=false;
     if(!league.c){ E.initCup(league, now()); initC=true; }
+    if(league.c && E.cupDraw(league,teams)) initC=true;
     { let g3=0; while(g3++<30 && league.c){ const C=league.c;
       if(!C.ph){ if(now()<E.cupSlotTime(league.anchor,C.w)) break; const id='cup/s'+C.s+'k'+C.k; const out=E.cupStart(league,teams); cupDocs.set(id,out.doc); out.changed.forEach(i=>changed.add(i)); cran++; }
       else { if(now()<C.end) break; E.cupFinish(league,teams).forEach(i=>changed.add(i)); cran++; } } }

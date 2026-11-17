@@ -356,6 +356,14 @@ th.sortable:hover{color:var(--ink)}
 .trophy{display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;min-width:76px}.trophy b{font-size:12px}.trophy span{font-size:11px;color:var(--muted)}
 .shelf.mini .shelfrow{min-height:34px;gap:6px;padding:2px 4px 0}.shelf.mini .trophy{min-width:0;flex-direction:row;gap:4px}.shelf.mini .trophy svg{width:16px;height:20px}.shelf.mini .trophy b{display:none}.shelf.mini .trophy span{font-size:10px}.shelf.mini .plank{height:5px}
 
+.bracketwrap{overflow-x:auto;padding-bottom:6px}.bracket{display:flex;gap:26px;min-width:max-content;align-items:stretch}
+.bcol{display:flex;flex-direction:column;width:190px}.bcells{display:flex;flex-direction:column;justify-content:space-around;gap:8px;flex:1}.bh{font:600 12px var(--f-display);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
+.bm{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}.bm.click{cursor:pointer}.bm.click:hover{border-color:var(--link)}.bm::after{content:"";position:absolute;right:-27px;top:50%;width:26px;border-top:2px solid var(--line)}.bcol:last-child .bm::after{display:none}
+.bt{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:13px}.bt+.bt{border-top:1px solid var(--line)}.bt .bn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bt.win{font-weight:700;background:rgba(29,127,73,.10)}.bt.me .bn{color:var(--link)}.bt.unk{color:var(--muted)}
+.bs{padding:2px 8px 4px;font-size:11px;color:var(--muted)}.bs.live{color:var(--bad);font-weight:600}.bl{padding:2px 8px;font-size:11px;color:var(--muted)}
+.chip.cup{background:var(--accent);color:var(--accent-ink)}.fx.cupx{border-left:3px solid var(--accent)}
+.toty{display:flex;flex-direction:column;gap:12px;padding:6px 0}.toty-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.toty-c{width:112px;text-align:center}.toty-p{margin-top:4px;padding:6px 4px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);cursor:pointer}.toty-p.empty{cursor:default;opacity:.6}.toty-n{font-weight:700;font-size:13px;line-height:1.15}.toty-r{font-size:16px;color:var(--link);font-weight:700}
+
 </style>
 </head>
 <body>
@@ -1188,7 +1196,7 @@ function createLeague(now){
   const anchor=mondayOf(now);
   const g0=firstSlotAfter(anchor, now+90*60000);
   const league={v:1, created:now, anchor, g:g0, g0, s:1, r:0, fx:makeFixtures(1), tb:emptyTable(), hist:[], wk:Math.floor(g0/3)};
-  initYouth(league, teams, names, now); initCup(league, now);
+  initYouth(league, teams, names, now); initCup(league, now); cupDraw(league, teams);
   const market=newMarketDoc();
   refreshMarket(market, teams, r, league.wk, names);
   return {league, teams, market};
@@ -1314,7 +1322,7 @@ function cupFirstAfter(anchor, ms){ let w=0; while(cupSlotTime(anchor,w)<=ms) w+
 function cupWeek(C){ return C.w0+(C.s-1)*CUP_CYCLE+CUP_STEP*C.k; }
 function initCup(league, nowMs){
   const w0=cupFirstAfter(league.anchor,nowMs);
-  league.c={s:1, k:0, w0, w:w0, ph:0, alive:null, by:[], lost:null, log:[], hist:[], end:0, pend:null};
+  league.c={s:1, k:0, w0, w:w0, ph:0, alive:null, by:[], br:null, W:null, L:null, log:[], hist:[], end:0, pend:null};
 }
 function medal(t, kind, m, s){ t.tr=(t.tr||[]).concat([{k:kind,m,s}]); }
 function shuffleR(r,arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -1325,41 +1333,60 @@ function shootout(r, hs, as){
   if(h===a){ if(r()<0.5) h++; else a++; }
   return [h,a];
 }
+function cupDraw(league, teams){
+  const C=league.c; if(!C||C.br||C.k!==0||C.ph) return false;
+  const ids=shuffleR(rngFrom('cup-draw-'+C.s), teams.map(t=>t.i));
+  const br=new Array(16).fill(null); const slots=[]; for(let q=0;q<16;q++) if(q!==1 && q!==9) slots.push(q);
+  slots.forEach((q,n)=>{ br[q]=ids[n]; });
+  C.br=br; C.W=[new Array(8).fill(null),new Array(4).fill(null),new Array(2).fill(null),[null]]; C.L=null;
+  C.W[0][0]=br[0]; C.W[0][4]=br[8]; C.by=[br[0],br[8]]; C.alive=ids.slice(); C.log=[];
+  return true;
+}
+function cupPairs(C,k){
+  const out=[];
+  if(k===0){ for(let j=0;j<8;j++){ const a=C.br[2*j], b=C.br[2*j+1]; if(a!=null&&b!=null) out.push({j,h:a,a:b}); } }
+  else if(k<3){ const W=C.W[k-1]; for(let j=0;j<W.length/2;j++) out.push({j,h:W[2*j],a:W[2*j+1]}); }
+  else { out.push({j:0,h:C.W[2][0],a:C.W[2][1]}); if(C.L&&C.L.length===2) out.push({j:1,h:C.L[0],a:C.L[1]}); }
+  return out;
+}
 function cupStart(league, teams){
-  const C=league.c, k=C.k; const r=rngFrom('cup-'+C.s+'-'+k); const kick=cupSlotTime(league.anchor,C.w);
-  let pairs=[]; C.by=C.by||[];
-  if(k===0){ const ids=shuffleR(r,teams.map(t=>t.i)); C.alive=ids.slice(); C.by=ids.slice(0,2); const rest=ids.slice(2); for(let i=0;i+1<rest.length;i+=2) pairs.push([rest[i],rest[i+1]]); }
-  else if(k<3){ const ids=shuffleR(r,C.alive); for(let i=0;i+1<ids.length;i+=2) pairs.push([ids[i],ids[i+1]]); }
-  else { pairs.push([C.alive[0],C.alive[1]]); if(C.lost&&C.lost.length===2) pairs.push([C.lost[0],C.lost[1]]); }
-  const doc={s:'c'+C.s, cs:C.s, r:k, t:kick, live:true, cup:1, by:k===0?C.by.slice():[], m:[]}; const changed=new Set(); const res=[], win=[], lost=[];
-  for(const [h,a] of pairs){
+  const C=league.c, k=C.k; const kick=cupSlotTime(league.anchor,C.w);
+  if(!C.br){ // gamle cuper uten trekning: bygg tre ut fra lagene som er igjen
+    if(k===0) cupDraw(league,teams);
+    else { C.br=new Array(16).fill(null); C.W=[new Array(8).fill(null),new Array(4).fill(null),new Array(2).fill(null),[null]]; const al=(C.alive||[]).slice(); C.W[k-1]=C.W[k-1].map((_,n)=>al[n]!=null?al[n]:null); }
+  }
+  const pairs=cupPairs(C,k);
+  const doc={s:'c'+C.s, cs:C.s, r:k, t:kick, live:true, cup:1, by:k===0?C.by.slice():[], m:[]}; const changed=new Set(); const res=[];
+  for(const {j,h,a} of pairs){
     const Ht=teams[h], At=teams[a];
     for(const T of [Ht,At]) if(!T.owner && !T.lineup) T.lineup=autoLineup(T);
     const m=simulateMatch(Ht,At,rngFrom(`cm-${C.s}-${k}-${h}-${a}`));
     let pen=null;
     if(m.hg===m.ag){ pen=shootout(rngFrom(`cp-${C.s}-${k}-${h}-${a}`),teamStrength(Ht),teamStrength(At)); m.pen=pen; m.ev.push({k:'st',t:m.L1+15+m.L2,tx:`Straffekonkurranse: ${pen[0]}–${pen[1]}. ${pen[0]>pen[1]?Ht.name:At.name} går videre.`}); }
     const hw = pen ? pen[0]>pen[1] : m.hg>m.ag;
-    win.push(hw?h:a); lost.push(hw?a:h); res.push([h,a,m.hg,m.ag,pen]);
-    doc.m.push(Object.assign({h,a},m)); changed.add(h); changed.add(a);
+    res.push({j,h,a,hg:m.hg,ag:m.ag,pen,w:hw?h:a,l:hw?a:h});
+    doc.m.push(Object.assign({h,a,j},m)); changed.add(h); changed.add(a);
   }
   doc.end=kick+Math.max(...doc.m.map(m=>m.L1+15+m.L2))*60000;
-  C.ph=1; C.end=doc.end; C.pend={w:win,l:lost,res};
+  C.ph=1; C.end=doc.end; C.pend={res};
   return {doc, changed};
 }
 function cupFinish(league, teams){
   const C=league.c, k=C.k, P=C.pend; const changed=new Set();
-  C.log=(C.log||[]).concat([{k, by:k===0?C.by.slice():[], m:P.res}]);
-  if(k===0) C.alive=C.by.concat(P.w); else if(k<3) C.alive=P.w.slice();
-  if(k===2) C.lost=P.l.slice();
+  C.log=(C.log||[]).concat([{k, by:k===0?C.by.slice():[], m:P.res.map(x=>[x.h,x.a,x.hg,x.ag,x.pen,x.j])}]);
+  if(k<3){ P.res.forEach(x=>{ C.W[k][x.j]=x.w; }); }
+  if(k===2) C.L=C.W[2].map((_,n)=>{ const x=P.res.find(y=>y.j===n); return x?x.l:null; }).filter(x=>x!=null);
+  if(k<3) C.alive=C.W[k].filter(x=>x!=null);
   if(k===3){
-    const f=P.res[0]; const win=P.w[0], sil=P.l[0]; const bro=P.res[1]?P.w[1]:null;
-    medal(teams[win],'cup','g',C.s); medal(teams[sil],'cup','s',C.s); changed.add(win); changed.add(sil);
-    if(bro!=null){ medal(teams[bro],'cup','b',C.s); changed.add(bro); }
-    C.hist=(C.hist||[]).concat([{s:C.s,g:teams[win].name,sv:teams[sil].name,b:bro!=null?teams[bro].name:null,t:win}]).slice(-20);
-    C.last={s:C.s,log:C.log};
-    C.s++; C.k=0; C.alive=null; C.by=[]; C.lost=null; C.log=[];
+    const f=P.res.find(x=>x.j===0), b=P.res.find(x=>x.j===1);
+    medal(teams[f.w],'cup','g',C.s); medal(teams[f.l],'cup','s',C.s); changed.add(f.w); changed.add(f.l);
+    if(b){ medal(teams[b.w],'cup','b',C.s); changed.add(b.w); }
+    C.hist=(C.hist||[]).concat([{s:C.s,g:teams[f.w].name,sv:teams[f.l].name,b:b?teams[b.w].name:null,t:f.w}]).slice(-20);
+    C.last={s:C.s,log:C.log,br:C.br,W:C.W,L:C.L,fin:[f.w,f.l,b?b.w:null]};
+    C.s++; C.k=0; C.alive=null; C.by=[]; C.br=null; C.W=null; C.L=null; C.log=[];
   } else C.k++;
   C.w=cupWeek(C); C.ph=0; C.pend=null; C.end=0;
+  if(C.k===0) cupDraw(league,teams);
   return changed;
 }
 
@@ -1522,7 +1549,7 @@ return {
   createLeague, newMarketDoc, refreshMarket, addLog, fmtKr, runSlot, simulateRound, finishRound, seasonRollover, GOAL_KINDS, labelOf,
   rngFrom, mulberry32, uid, SQUAD_ROLES, bestTaker,
   slotsOf, layoutOf, validTy, defAllowed, defIdx, simulateFriendly, rnOf, ageAt, ageParts, ensureAges, setClock, AGE_ROUNDS, TRAIN_SCALE,
-  STYLE, STYLE_INFO, CUP_ROUND_NAME, CUP_ROUNDS, cupSlotTime, initCup, cupStart, cupFinish, cupWeek, YDAYS, YMAX, YMIN, SCOUT_TYPES, yslotTime, yFirstAfter, initYouth, youthRound, makeOffer, promoteYouth, ylog, youthPseudo, qBand, genProspect, CAPW, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
+  STYLE, STYLE_INFO, CUP_ROUND_NAME, CUP_ROUNDS, cupSlotTime, initCup, cupDraw, cupPairs, cupStart, cupFinish, cupWeek, YDAYS, YMAX, YMIN, SCOUT_TYPES, yslotTime, yFirstAfter, initYouth, youthRound, makeOffer, promoteYouth, ylog, youthPseudo, qBand, genProspect, CAPW, SUB_SLOTS, SUB_COND, TAC, BN_GROUPS, BN_NAME, SLOT_GROUP, tmOf, ldOf, expLevel, capScore, tmLabel, ldLabel, expLabel, capLabel, bestCaptainId, effLineup, calcRatingsSl
 };
 })();
 
@@ -1673,6 +1700,7 @@ function makeStore({db, uid, now}){
     let yran=0; { let g2=0; while(g2++<400 && league.y && now()>=E.yslotTime(league.anchor,league.y.g)){ E.youthRound(league,teams,names).forEach(i=>changed.add(i)); yran++; } }
     let cran=0; const cupDocs=new Map(); let initC=false;
     if(!league.c){ E.initCup(league, now()); initC=true; }
+    if(league.c && E.cupDraw(league,teams)) initC=true;
     { let g3=0; while(g3++<30 && league.c){ const C=league.c;
       if(!C.ph){ if(now()<E.cupSlotTime(league.anchor,C.w)) break; const id='cup/s'+C.s+'k'+C.k; const out=E.cupStart(league,teams); cupDocs.set(id,out.doc); out.changed.forEach(i=>changed.add(i)); cran++; }
       else { if(now()<C.end) break; E.cupFinish(league,teams).forEach(i=>changed.add(i)); cran++; } } }
@@ -2161,8 +2189,8 @@ function viewLineup(){
   ${roleCtl}<div class="row" style="margin-bottom:6px"><div class="seg" role="group" aria-label="Spilleordre">${E.ordersFor(st).map(o=>`<button data-act="order" data-o="${o}" aria-pressed="${o===ord}">${ordLabel(st,o)}</button>`).join('')}</div></div>
   <p class="small muted" style="margin:0 0 12px;max-width:60ch">${ordHelp(st,ord)}</p>
   <div class="row" style="margin:0 0 8px;align-items:flex-end"><label class="f">Sorter spillere etter<select data-change="lsort">${sortOpts()}</select></label><span class="tiny muted" style="flex:1;min-width:160px">Dra en spiller fra listen til banen, eller dra mellom plassene på banen for å bytte. Trykk på en spiller for å se alle egenskapene hans.</span></div>
-  <div class="tablewrap vscroll" style="max-height:380px"><table><thead><tr><th></th><th>Spiller</th><th class="c">Nå</th>${metricHead()}${E.SK.map(k=>`<th class="c sortable${S.lsort==='sk:'+k?' hl':''}" data-act="lsortk" data-k="${k}" title="Sorter etter ${E.SK_NAME[k]}, høyest først">${E.SK_SHORT[k]}${S.lsort==='sk:'+k?' ▼':''}</th>`).join('')}<th class="c">Form</th></tr></thead><tbody>
-  ${cand.map(p=>`<tr class="click${p.id===lu.sl[i]?' me':''}" data-act="pinfo" data-id="${p.id}" data-drag="player" data-drop="player"><td class="gr"><span class="grip" aria-hidden="true">⋮⋮</span></td><td><span class="pname">${p.no!=null?`<span class="nr">${p.no}</span> `:''}${esc(p.n)}</span>${specBadge(p)}${isSus(p)?` <span class="tag red">${(p.inj||0)>0?'Skadet':'Utestengt'}</span>`:''}<div class="tiny muted">${roleOf(p)}, ${ageStr(p)}</div></td><td class="c">${where(p.id)}</td>${metricCell(p,st)}${E.SK.map(k=>`<td class="c${S.lsort==='sk:'+k?' hl':''}">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td></tr>`).join('')}</tbody></table></div></div>`;
+  <div class="tablewrap vscroll" style="max-height:380px"><table><thead><tr><th></th><th>Spiller</th><th class="c">Nå</th><th class="c sortable${S.lsort==='age'||S.lsort==='ageO'?' hl':''}" data-act="lsortage" title="Sorter etter alder (trykk igjen for å bytte retning)">Alder${S.lsort==='age'?' ▲':S.lsort==='ageO'?' ▼':''}</th>${metricHead()}${E.SK.map(k=>`<th class="c sortable${S.lsort==='sk:'+k?' hl':''}" data-act="lsortk" data-k="${k}" title="Sorter etter ${E.SK_NAME[k]}, høyest først">${E.SK_SHORT[k]}${S.lsort==='sk:'+k?' ▼':''}</th>`).join('')}<th class="c">Form</th></tr></thead><tbody>
+  ${cand.map(p=>`<tr class="click${p.id===lu.sl[i]?' me':''}" data-act="pinfo" data-id="${p.id}" data-drag="player" data-drop="player"><td class="gr"><span class="grip" aria-hidden="true">⋮⋮</span></td><td><span class="pname">${p.no!=null?`<span class="nr">${p.no}</span> `:''}${esc(p.n)}</span>${specBadge(p)}${isSus(p)?` <span class="tag red">${(p.inj||0)>0?'Skadet':'Utestengt'}</span>`:''}<div class="tiny muted">${roleOf(p)}, ${ageStr(p)}</div></td><td class="c">${where(p.id)}</td><td class="c small${S.lsort==='age'||S.lsort==='ageO'?' hl':''}" style="white-space:nowrap">${ageStr(p)}</td>${metricCell(p,st)}${E.SK.map(k=>`<td class="c${S.lsort==='sk:'+k?' hl':''}">${sk(p.s[E.SKI[k]])}</td>`).join('')}<td class="c num" title="${FORM_LABEL[p.f||5]}">${p.f||5}</td></tr>`).join('')}</tbody></table></div></div>`;
   const extra=capSubsPanel(t,lu,by,xi);
   const rat=`<div class="card"><h3>Lagets ratinger <small>etter form og spesialiteter</small></h3>${ratingsHtml(r)}</div>`;
   const per=perMatch(); const nr=nextRound(); const ups=isY()?[]:upcomingMine(t);
@@ -2321,10 +2349,10 @@ function viewTrain(){
     const inLine=!!roles[p.id]; const role=roles[p.id]||E.bestRole(p);
     const cells=ks.map(k=>{ const i=E.SKI[k]; const lv=p.s[i]; if(lv>=20) return `<td>${sk(lv)} <span class="muted small">Maks</span></td>`;
       const need=E.cost(lv); const have=p.pr[i]||0; const rate=E.trainingRate(p,k,role,inLine,share); const wk=rate>0.02?Math.max(1,Math.ceil((need-have)/rate)):null;
-      return `<td><div class="row" style="gap:8px;flex-wrap:nowrap">${sk(lv)}<div class="bar" style="width:70px"><i style="width:${Math.min(100,have/need*100)}%"></i></div><span class="small muted num">${wk?'ca. '+wk+' u':'—'}</span></div></td>`; }).join('');
+      return `<td><div class="row" style="gap:8px;flex-wrap:nowrap">${sk(lv)}<div class="bar" style="width:70px"><i style="width:${Math.min(100,have/need*100)}%"></i></div><span class="small muted num" title="${wk?'Ca. '+wk+' vanlige uker (7 dager) = ca. '+(wk*3)+' seriekamper, siden laget spiller tre kamper i uka':''}">${wk?'ca. '+wk+' u':'—'}</span></div></td>`; }).join('');
     return `<tr><td><span class="pname">${esc(p.n)}</span><div class="tiny muted">${E.ROLE_NAME[role]}${inLine?'':' (benk, halv effekt)'} · ${ageStr(p)}</div></td>${cells}</tr>`; }).join('');
   const log=(t.tl||[]).slice(0,12);
-  return `<div class="sectionhead"><h2>Trening</h2><span class="muted small">Treningen oppdateres etter hver kamp, tre ganger i uka</span></div>
+  return `<div class="sectionhead"><h2>Trening</h2><span class="muted small">Treningen oppdateres etter hver kamp, tre ganger i uka · «u» betyr vanlige uker, ikke kamper</span></div>
   <div class="card" style="margin-bottom:16px"><div class="row"><label class="f">Hovedtrening<select id="trainA" data-change="trainA">${opt(tr.a,false)}</select></label><label class="f">Ekstra trening<select id="trainB" data-change="trainB">${opt(tr.b,true)}</select></label></div>
   <p class="small muted" style="margin:12px 0 0;max-width:70ch">${ks.length===2?'Med to treningstyper får hver av dem 60 % effekt. Du trener mer totalt, men hver egenskap utvikler seg saktere.':'Med én treningstype får egenskapen full effekt. Lave nivåer går raskt, høye nivåer tar mange uker. Unge spillere lærer mye fortere enn eldre. En 17-åring trener mer enn dobbelt så fort som en på 25.'}</p></div>
   <div class="grid g2" style="align-items:start"><div class="tablewrap" style="grid-column:1/-1"><table><thead><tr><th>Spiller</th>${ks.map(k=>`<th>${E.SK_NAME[k]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>${rel}
@@ -2431,7 +2459,7 @@ function viewRoundBrowser(){
   }
   const status=doc?(doc.live?'pågår':'ferdig'):'ikke spilt';
   return `<div class="sectionhead"><h2>Kamper</h2><span class="muted small">Sesong ${L.s}</span></div>
-  <div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="rnd" data-d="-1"${r<=0?' disabled':''}>Forrige</button><b class="num">Runde ${r+1} av ${E.ROUNDS}</b><button class="btn sm" data-act="rnd" data-d="1"${r>=E.ROUNDS-1?' disabled':''}>Neste</button><span class="muted small">${fmtTime(when)} · ${status}</span><span class="spacer"></span>${t?`<button class="btn sm" data-act="gmode" data-v="mine">Mine kamper</button><button class="btn sm" data-act="mine" aria-pressed="${S.mine}">${S.mine?'Vis alle kamper':'Bare mine kamper'}</button>`:''}</div>${body}${panel}`;
+  <div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="rnd" data-d="-1"${r<=0?' disabled':''}>Forrige</button><b class="num">Runde ${r+1} av ${E.ROUNDS}</b><button class="btn sm" data-act="rnd" data-d="1"${r>=E.ROUNDS-1?' disabled':''}>Neste</button><span class="muted small">${fmtTime(when)} · ${status}</span><span class="spacer"></span>${t?`<button class="btn sm" data-act="gmode" data-v="mine">Mine kamper</button><button class="btn sm" data-act="mine" aria-pressed="${S.mine}">${S.mine?'Vis alle kamper':'Bare mine kamper'}</button>`:''}</div>${body}${panel}${totrCard(doc?doc.m:null,'Runde '+(r+1)+' · sesong '+L.s,roundDone(doc))}`;
 }
 
 /* ---------- Kamper: mine spilte og kommende kamper ---------- */
@@ -2448,22 +2476,35 @@ function viewMyMatches(t){
   const played=[]; docs.forEach(d=>{ const m=d.m.find(x=>x.h===me||x.a===me); if(m) played.push({d,m,lv:liveOf(m,d,true)}); });
   const ups=upcomingMine(t);
   const row=(r,m,H,A,sc,head,cls,act)=>`<button class="fx me ${cls||''}" data-act="${act}" data-r="${r}" data-h="${H.i}"><span class="fxh">${head}</span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}</span><span class="t a">${crest(A,22)}<span>${esc(A.name)}</span></span></button>`;
-  const up=ups.length?ups.map(u=>{ const H=S.teams[u.home?me:u.opp], A=S.teams[u.home?u.opp:me];
-    return row(u.r,null,H,A,'–',`Runde ${u.r+1} · ${fmtTime(u.time)} <span class="chip ${u.own?'own':''}">${u.own?'Egen oppstilling':'Standardoppstilling'}</span> <span class="go">Sett opp laget →</span>`,'up','editround'); }).join(''):`<div class="empty">Ingen flere kamper denne sesongen. Nye terminer kommer når sesongen er over.</div>`;
-  const plLeague=played.length?played.map(({d,m,lv})=>{ const H=S.teams[m.h],A=S.teams[m.a]; const live=lv.st==='live'||lv.st==='break'; const [c,l]=resChip(m,me);
+  const upItems=ups.map(u=>{ const H=S.teams[u.home?me:u.opp], A=S.teams[u.home?u.opp:me];
+    return {t:u.time,h:row(u.r,null,H,A,'–',`Runde ${u.r+1} · ${fmtTime(u.time)} <span class="chip ${u.own?'own':''}">${u.own?'Egen oppstilling':'Standardoppstilling'}</span> <span class="go">Sett opp laget →</span>`,'up','editround')}; });
+  { const C=L.c; if(C&&!C.ph&&C.br){ const pr=E.cupPairs(C,C.k).find(p=>p.h===me||p.a===me); const bye=C.k===0&&C.br&&(C.br[0]===me||C.br[8]===me);
+      if(pr&&pr.h!=null&&pr.a!=null){ const H=S.teams[pr.h],A=S.teams[pr.a]; const cT=E.cupSlotTime(L.anchor,C.w);
+        upItems.push({t:cT,h:`<button class="fx me up cupx" data-act="gocup"><span class="fxh"><span class="chip cup">Cup</span> ${E.CUP_ROUND_NAME[C.k]} · ${fmtTime(cT)} <span class="go">Se cuptreet →</span></span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">–</span><span class="t a">${crest(A,22)}<span>${esc(A.name)}</span></span></button>`}); }
+      else if(bye) upItems.push({t:E.cupSlotTime(L.anchor,C.w),h:`<button class="fx me up cupx" data-act="gocup"><span class="fxh"><span class="chip cup">Cup</span> ${E.CUP_ROUND_NAME[0]} · ${fmtTime(E.cupSlotTime(L.anchor,C.w))}</span><span class="t"><span>${esc(t.name)} har walkover videre til neste runde</span></span></button>`}); } }
+  upItems.sort((a,b)=>a.t-b.t);
+  const up=upItems.length?upItems.map(x=>x.h).join(''):`<div class="empty">Ingen flere kamper denne sesongen. Nye terminer kommer når sesongen er over.</div>`;
+  const plItems=[];
+  played.forEach(({d,m,lv})=>{ const H=S.teams[m.h],A=S.teams[m.a]; const live=lv.st==='live'||lv.st==='break'; const [c,l]=resChip(m,me);
     const chip=live?`<span class="chip live">Pågår ${esc(lv.label)}</span>`:lv.st==='done'?`<span class="chip ${c}">${l}</span>`:'';
     const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}`;
-    return row(d.r,m,H,A,sc,`Runde ${d.r+1} · ${fmtTime(d.t)} ${chip}`,'','match'); }).join(''):`<div class="empty">Ingen kamper spilt ennå denne sesongen.</div>`;
+    plItems.push({t:d.t,h:row(d.r,m,H,A,sc,`Runde ${d.r+1} · ${fmtTime(d.t)} ${chip}`,'','match')}); });
+  Object.values(S.cupAll||{}).forEach(byK=>Object.values(byK).forEach(d=>{ const m=d.m.find(x=>x.h===me||x.a===me); if(!m) return; const lv=liveOf(m,d,true); const H=S.teams[m.h],A=S.teams[m.a];
+    const live=lv.st==='live'||lv.st==='break'; const gf=m.h===me?lv.score[0]:lv.score[1], ga=m.h===me?lv.score[1]:lv.score[0]; const won=lv.st==='done'&&(m.pen?(m.h===me?m.pen[0]>m.pen[1]:m.pen[1]>m.pen[0]):gf>ga);
+    const chip=live?`<span class="chip live">Pågår ${esc(lv.label)}</span>`:lv.st==='done'?`<span class="chip ${won?'w':'l'}">${won?'Seier':'Tap'}${m.pen?' på straffer':''}</span>`:'';
+    const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}${lv.st==='done'&&m.pen?` <span class="tiny muted">(${m.pen[0]}–${m.pen[1]})</span>`:''}`;
+    plItems.push({t:d.t,h:`<button class="fx me cupx" data-act="cupmatch" data-from="games" data-k="${d.r}" data-cs="${d.cs}" data-h="${m.h}"><span class="fxh"><span class="chip cup">Cup</span> ${E.CUP_ROUND_NAME[d.r]}${m.j===1&&d.r===3?' (bronsefinale)':''} · sesong ${d.cs} · ${fmtTime(d.t)} ${chip}</span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">${sc}</span><span class="t a">${crest(A,22)}<span>${esc(A.name)}</span></span></button>`}); }));
   const frs=Object.values(S.friendlies||{}).filter(f=>f.st==='done'&&f.m&&(f.h===me||f.a===me)).sort((a,b)=>b.t-a.t);
-  const frRows=frs.map(f=>{ const H=S.teams[f.h],A=S.teams[f.a]; const gf=f.h===me?f.m.hg:f.m.ag, ga=f.h===me?f.m.ag:f.m.hg; const [c,l]=gf>ga?['w','Seier']:gf<ga?['l','Tap']:['d','Uavgjort'];
-    return `<button class="fx me" data-act="frmatch" data-id="${f.id}"><span class="fxh">Treningskamp · ${fmtTime(f.t)} <span class="chip ${c}">${l}</span> <span class="chip">Vennskapskamp</span></span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">${f.m.hg} – ${f.m.ag}</span><span class="t a"><span>${esc(A.name)}</span>${crest(A,22)}</span></button>`; }).join('');
-  const pl=(played.length||frs.length)?(plLeague.startsWith('<div class="empty"')?'':plLeague)+frRows:plLeague;
+  frs.forEach(f=>{ const H=S.teams[f.h],A=S.teams[f.a]; const gf=f.h===me?f.m.hg:f.m.ag, ga=f.h===me?f.m.ag:f.m.hg; const [c,l]=gf>ga?['w','Seier']:gf<ga?['l','Tap']:['d','Uavgjort'];
+    plItems.push({t:f.t,h:`<button class="fx me" data-act="frmatch" data-id="${f.id}"><span class="fxh">Treningskamp · ${fmtTime(f.t)} <span class="chip ${c}">${l}</span> <span class="chip">Vennskapskamp</span></span><span class="t">${crest(H,22)}<span>${esc(H.name)}</span></span><span class="sc num">${f.m.hg} – ${f.m.ag}</span><span class="t a"><span>${esc(A.name)}</span>${crest(A,22)}</span></button>`}); });
+  plItems.sort((a,b)=>b.t-a.t);
+  const pl=plItems.length?plItems.map(x=>x.h).join(''):`<div class="empty">Ingen kamper spilt ennå denne sesongen.</div>`;
   return `<div class="sectionhead"><h2>Mine kamper</h2><span class="muted small">Sesong ${L.s}</span><span class="spacer"></span><button class="btn sm" data-act="gmode" data-v="all">Alle kamper i en runde</button></div>
   <div class="grid g2" style="align-items:start"><div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 0">Kommende kamper</h3><p class="tiny muted" style="margin:4px 16px 8px">Trykk på en kamp for å sette opp lag, formasjon, dødballtaker og bytter akkurat for den kampen.</p>${up}</div>
-  <div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 0">Spilte kamper</h3><p class="tiny muted" style="margin:4px 16px 8px">Trykk på en kamp for resultat, ratinger, spillerratinger og flaks. Treningskamper vises også her, men de gir ingen treningseffekt, kort eller skader.</p>${pl}</div></div>`;
+  <div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 0">Spilte kamper</h3><p class="tiny muted" style="margin:4px 16px 8px">Trykk på en kamp for resultat, ratinger, spillerratinger og flaks. Cupkamper er merket «Cup», og treningskamper vises også her, men de gir ingen treningseffekt, kort eller skader.</p>${pl}</div></div>`;
 }
 function viewMatchDetail(){
-  const {r,h}=S.md; const cupM=!!S.md.cup; const doc=cupM?(S.cup||{})[r]:S.rounds[r]; const m=doc&&doc.m.find(x=>x.h===h);
+  const {r,h}=S.md; const cupM=!!S.md.cup; const doc=cupM?((S.cupAll||{})[S.md.cs]||{})[r]:S.rounds[r]; const m=doc&&doc.m.find(x=>x.h===h);
   if(!m){ S.md=null; return cupM?viewCup():viewGames(); }
   return `<div class="sectionhead"><h2>${cupM?'Bjørn Ove Klups Cup':'Kamp'}</h2><span class="muted small">${cupM?E.CUP_ROUND_NAME[r]+' · sesong '+doc.cs:'Runde '+(r+1)} · ${fmtTime(doc.t)}</span></div><div class="row" style="margin-bottom:4px"><button class="btn sm" data-act="mdback">← Tilbake til kamper</button></div>${matchPanel(doc,m)}`;
 }
@@ -2482,11 +2523,11 @@ function duelsInner(m,H,A,el){
   const q=ratAt(m,el), h=q.h, a=q.a;
   return `<div class="dlegend"><span class="h">${esc(H.name)}</span><span class="a">${esc(A.name)}</span></div>
   <div class="dgrp">${esc(H.short)} angriper</div>
-  ${duelRow('Midtangrep','Midtforsvar',h[5],a[1])}${duelRow('Venstre angrep','Høyre forsvar',h[4],a[2])}${duelRow('Høyre angrep','Venstre forsvar',h[6],a[0])}
+  ${duelRow('Venstre angrep','Høyre forsvar',h[4],a[2])}${duelRow('Midtangrep','Midtforsvar',h[5],a[1])}${duelRow('Høyre angrep','Venstre forsvar',h[6],a[0])}
   <div class="dgrp">Midtbanen</div>
   ${duelRow('Midtbane','Midtbane',h[3],a[3])}
   <div class="dgrp">${esc(A.short)} angriper</div>
-  ${duelRow('Midtforsvar','Midtangrep',h[1],a[5])}${duelRow('Høyre forsvar','Venstre angrep',h[2],a[4])}${duelRow('Venstre forsvar','Høyre angrep',h[0],a[6])}`;
+  ${duelRow('Venstre forsvar','Høyre angrep',h[0],a[6])}${duelRow('Midtforsvar','Midtangrep',h[1],a[5])}${duelRow('Høyre forsvar','Venstre angrep',h[2],a[4])}`;
 }
 function minLabel(m,el){ return el>=m.L1+15 ? E.labelOf(Math.max(m.L1+15.5,el),m.L1) : el>=m.L1 ? 'Pause' : E.labelOf(Math.max(0.3,el),m.L1); }
 function duelsCard(m,H,A,lv,key){
@@ -2630,7 +2671,8 @@ function viewHelp(){
   <h3>Personlighet, erfaring og kaptein</h3><ul><li>Spillerne har temperament, lederegenskap og noen har en spillestil: Lagspiller, Individualist, Kjemper eller Fair spiller. Du ser det på spillerkortet.</li><li>Erfaring bygges opp ved at spillerne spiller kamper. Lederegenskap og erfaring avgjør hvor godt egnet en spiller er som kaptein.</li><li>En god kaptein løfter alle ratingene litt, og mest når laget ligger under. Spilles kapteinen av banen, tar den beste på banen over med litt mindre effekt.</li></ul>
   <h3>Skader</h3><ul><li>Det er lav risiko for skade i hver seriekamp, men det kan skje. En skadet spiller er ute i 1 til 6 kamper, oftest kort tid. Han erstattes automatisk i oppstillingen, og du ser det på Oversikt og i spillerlisten.</li><li>Treningskamper og ungdomskamper gir ikke skader, kort eller treningseffekt. Treningskamper vises likevel i Mine kamper.</li></ul>
   <h3>Kort og utestengelse</h3><ul><li>Temperamentsfulle spillere forårsaker lettere frispark og får oftere gult kort.</li><li>To gule kort i samme kamp gir rødt kort. Rødt kort er sjeldent, og laget må spille resten av kampen med ti mann.</li><li>Rødt kort gir én kamps utestengelse. Det samme gjelder tre gule kort i ulike kamper.</li></ul>
-  <h3>Bjørn Ove Klups Cup</h3><ul><li>Alle lagene i serien er med i en utslagscup, Bjørn Ove Klups Cup. Runder spilles på onsdager klokka 18.00, med to ukers mellomrom: åttedelsfinale, kvartfinale, semifinale og finale. En cupsesong varer ni uker, og første cupsesong er sesong 1.</li><li>Første runde trekker to lag direkte videre, og de øvrige tolv møtes. Uavgjort etter full tid avgjøres på straffer. Tapende semifinalister spiller bronsefinale samme dag som finalen.</li><li>Kampene spilles i sanntid med direktekommentar, akkurat som i serien. Du ser dem i Cup-fanen.</li></ul>
+  <h3>Bjørn Ove Klups Cup</h3><ul><li>Alle lagene i serien er med i en utslagscup, Bjørn Ove Klups Cup. Runder spilles på onsdager klokka 18.00, med to ukers mellomrom: åttedelsfinale, kvartfinale, semifinale og finale. En cupsesong varer ni uker, og første cupsesong er sesong 1.</li><li>Første runde trekker to lag direkte videre, og de øvrige tolv møtes. Uavgjort etter full tid avgjøres på straffer. Tapende semifinalister spiller bronsefinale samme dag som finalen.</li><li>Trekningen gjøres på forhånd, så Cup-fanen viser hele cuptreet: hvem som møter hvem, resultatene og veien videre til finalen. Cupkamper vises også i Mine kamper, merket «Cup».</li><li>Kampene spilles i sanntid med direktekommentar, akkurat som i serien.</li></ul>
+  <h3>Rundens lag</h3><ul><li>Etter hver serierunde og hver cuprunde settes det sammen et lag med de best vurderte spillerne på hver plass (keeper, to midtstoppere, backer, midtbane, ving og spiss), uansett hvilket lag de spiller for. Kun spillere med minst 45 minutter kommer med. Du finner det under Kamper og i Cup-fanen.</li></ul>
   <h3>Troféhylle</h3><ul><li>Alle lag har en troféhylle med gull, sølv og bronse fra serien (topp tre) og cupen (vinner, finalist og bronsefinalevinner). Hver medalje viser hvilken sesong den ble vunnet. Har laget ikke vunnet noe, er hylla tom.</li></ul>
   <h3>Bytter</h3><ul><li>Hvert lag kan bytte inntil fem spillere i løpet av en kamp. Du planlegger dem i Oppstilling: velg minutt, betingelse (alltid, ved tap, ved ledelse eller ved uavgjort), hvem som går ut og inn, og eventuelt ny posisjon.</li><li>Eksempel: ved tap fra 60. minutt går en midtstopper ut og en ekstra spiss kommer inn. Ved ledelse kan du gjøre det motsatte.</li></ul>
   <h3>Spesialiteter</h3><ul>${Object.keys(E.SPEC).map(k=>`<li><b>${E.SPEC[k]}:</b> ${E.SPEC_INFO[k]}</li>`).join('')}</ul>
@@ -2691,32 +2733,96 @@ function shelf(t,mini){
   return `<div class="shelf${mini?' mini':''}">${tr.length?`<div class="shelfrow">${items}</div>`:`<div class="shelfrow empty"><span class="muted${mini?' tiny':' small'}">Ingen troféer ennå</span></div>`}<div class="plank"></div></div>`;
 }
 function shelfCard(t){ return `<div class="card"><h3>Troféhylle</h3>${shelf(t,false)}</div>`; }
+/* ---------- rundens lag ---------- */
+const TOTR_ROWS=[[['FC',2]],[['WL',1],['MC',2],['WR',1]],[['DL',1],['DC',2],['DR',1]],[['GK',1]]];
+const TOTR_BUCKET={GK:'GK',DL:'DL',DC:'DC',DR:'DR',MC:'MC',WL:'WL',AL:'WL',WR:'WR',AR:'WR',FC:'FC'};
+function totrOf(docMs){
+  const by={}; docMs.forEach(m=>Object.entries(m.pr||{}).forEach(([id,v])=>{ if(v[1]<45) return; const b=TOTR_BUCKET[v[2]]; if(!b) return; (by[b]=by[b]||[]).push({id,n:v[3],r:v[0]/10,min:v[1],team:v[4]==='h'?m.h:m.a,st:b}); }));
+  return TOTR_ROWS.map(row=>row.map(([b,n])=>{ const l=(by[b]||[]).sort((x,y)=>y.r-x.r||y.min-x.min).slice(0,n); while(l.length<n) l.push(null); return {b,l}; }));
+}
+const TOTR_NAME={GK:'Keeper',DL:'Venstre back',DC:'Midtstopper',DR:'Høyre back',MC:'Midtbane',WL:'Venstre ving',WR:'Høyre ving',FC:'Spiss'};
+function totrCard(docMs,title,allDone){
+  if(!docMs||!docMs.length) return '';
+  const head=`<h3>Rundens lag <small>${esc(title)}</small></h3>`;
+  if(!allDone) return `<div class="card" style="margin-top:16px">${head}<div class="empty" style="padding:8px 0">Rundens lag vises når alle kampene er ferdige.</div></div>`;
+  const rows=totrOf(docMs);
+  const chip=x=>x?`<div class="toty-p" data-act="player" data-id="${x.id}"><div class="toty-n">${esc(x.n)}</div><div class="tiny muted">${esc((S.teams[x.team]||{}).name||'')}</div><div class="num toty-r">${x.r.toFixed(1)}</div></div>`:`<div class="toty-p empty"><div class="tiny muted">Ingen</div></div>`;
+  return `<div class="card" style="margin-top:16px">${head}<div class="toty">${rows.map(row=>`<div class="toty-row">${row.map(g=>g.l.map(x=>`<div class="toty-c"><div class="caps tiny">${TOTR_NAME[g.b]}</div>${chip(x)}</div>`).join('')).join('')}</div>`).join('')}</div><p class="tiny muted" style="margin:8px 0 0">Beste rating per plass blant alle spillere som spilte minst 45 minutter i runden.</p></div>`;
+}
+const roundDone=(d)=>d&&d.m&&d.m.length&&d.m.every(m=>liveOf(m,d,true).st==='done');
+
+/* ---------- cup: tre og oversikt ---------- */
+function cupCells(Cx,isCur){
+  const nm=i=>i==null?null:S.teams[i];
+  const curDoc=isCur&&Cx.ph?(S.cupAll||{})[Cx.s]&&(S.cupAll[Cx.s][Cx.k]):null;
+  const cell=(k,j)=>{
+    let h,a;
+    if(k===0){ h=Cx.br[2*j]; a=Cx.br[2*j+1]; }
+    else if(k<3){ h=Cx.W[k-1][2*j]; a=Cx.W[k-1][2*j+1]; }
+    else if(j===0){ h=Cx.W[2][0]; a=Cx.W[2][1]; }
+    else { h=Cx.L?Cx.L[0]:null; a=Cx.L?Cx.L[1]:null; }
+    const bye=k===0&&(h==null||a==null);
+    let sc=null,pen=null,live=false,fin=false,win=null;
+    const lg=(Cx.log||[]).find(x=>x.k===k); const lm=lg&&lg.m.find(x=>x[5]===j);
+    if(lm){ sc=[lm[2],lm[3]]; pen=lm[4]; fin=true; }
+    else if(curDoc&&Cx.k===k){ const m=curDoc.m.find(x=>x.j===j); if(m){ const lv=liveOf(m,curDoc,true); if(lv.st!=='before'){ sc=lv.score; live=lv.st==='live'||lv.st==='break'; fin=lv.st==='done'; pen=fin?m.pen:null; } } }
+    if(fin) win=pen?(pen[0]>pen[1]?h:a):(sc[0]>sc[1]?h:a);
+    if(bye) win=h!=null?h:a;
+    return {k,j,h,a,bye,sc,pen,live,fin,win,doc:!!((S.cupAll||{})[Cx.s]&&S.cupAll[Cx.s][k])&&!bye};
+  };
+  return cell;
+}
+function bracketHtml(Cx,isCur){
+  if(!Cx||!Cx.br) return '<div class="empty">Trekningen er ikke gjort ennå.</div>';
+  const me=S.me; const cell=cupCells(Cx,isCur);
+  const team=(i,c,side)=>{ const T=S.teams[i]; const w=c.win!=null&&c.win===i; const g=c.sc?(side===0?c.sc[0]:c.sc[1]):''; const p=c.pen&&c.fin?` <span class="tiny">(${side===0?c.pen[0]:c.pen[1]})</span>`:'';
+    if(i==null) return `<div class="bt unk"><span>?</span></div>`;
+    return `<div class="bt${w?' win':''}${i===me?' me':''}">${crest(T,16)}<span class="bn">${esc(T.name)}</span><b class="num">${g}${p}</b></div>`; };
+  const box=(c,label)=>{
+    const inner=c.bye?`${team(c.h!=null?c.h:c.a,c,0)}<div class="bs">Direkte videre</div>`:`${team(c.h,c,0)}${team(c.a,c,1)}${c.live?'<div class="bs live">Pågår</div>':''}`;
+    const attrs=c.doc&&c.h!=null?` data-act="cupmatch" data-k="${c.k}" data-h="${c.h}" data-cs="${Cx.s}" role="button" tabindex="0"`:'';
+    return `<div class="bm${c.doc&&c.h!=null?' click':''}"${attrs}>${label?`<div class="bl">${label}</div>`:''}${inner}</div>`; };
+  const col=(k,n,extra)=>`<div class="bcol"><div class="bh">${E.CUP_ROUND_NAME[k]}</div><div class="bcells">${Array.from({length:n},(_,j)=>box(cell(k,j))).join('')}</div>${extra||''}</div>`;
+  const fin=`<div class="bcol"><div class="bh">Finale</div><div class="bcells">${box(cell(3,0))}</div><div class="bh" style="margin-top:18px">Bronsefinale</div><div class="bcells">${box(cell(3,1))}</div></div>`;
+  return `<div class="bracket">${col(0,8)}${col(1,4)}${col(2,2)}${fin}</div>`;
+}
 function viewCup(){
   if(S.md&&S.md.cup) return viewMatchDetail();
   const L=S.league; const C=L&&L.c; const t=myTeam();
   if(!C) return `<div class="sectionhead"><h2>Bjørn Ove Klups Cup</h2></div><div class="card"><div class="empty">Cupen settes opp ved neste oppdatering. Last siden på nytt om et øyeblikk.</div></div>`;
-  const nm=i=>S.teams[i]?S.teams[i].name:'?'; const me=t?t.i:-1;
   const nextT=E.cupSlotTime(L.anchor,C.w); const rname=E.CUP_ROUND_NAME[C.k];
   const status=C.ph?`<b>${rname}</b> pågår`:`Neste runde: <b>${rname}</b> ${fmtTime(nextT)} · ${until(nextT)}`;
-  const docs=S.cup||{};
-  const roundBlock=k=>{ const d=docs[k]; const lg=(C.log||[]).find(x=>x.k===k);
-    let rows='';
-    if(d){ rows=d.m.map(m=>{ const lv=liveOf(m,d,true); const sc=lv.st==='before'?'–':`${lv.score[0]} – ${lv.score[1]}`; const pen=lv.st==='done'&&m.pen?` <span class="tiny muted">(str. ${m.pen[0]}–${m.pen[1]})</span>`:''; const live=lv.st==='live'||lv.st==='break'; return `<button class="fx ${m.h===me||m.a===me?'me':''}" data-act="cupmatch" data-k="${k}" data-h="${m.h}"><span class="fxh">${live?`<span class="chip live">Pågår ${esc(lv.label)}</span>`:fmtTime(d.t)}</span><span class="t">${crest(S.teams[m.h],22)}<span>${esc(nm(m.h))}</span></span><span class="sc num">${sc}</span><span class="t a"><span>${esc(nm(m.a))}</span>${crest(S.teams[m.a],22)}</span>${pen}</button>`; }).join(''); }
-    else if(lg){ rows=lg.m.map(m=>`<div class="yrow"><b>${esc(nm(m[0]))}</b> <span class="num">${m[2]} – ${m[3]}</span> <b>${esc(nm(m[1]))}</b>${m[4]?` <span class="tiny muted">(str. ${m[4][0]}–${m[4][1]})</span>`:''}</div>`).join(''); }
-    if(!rows) return '';
-    const by=d&&d.by&&d.by.length?`<p class="tiny muted" style="margin:6px 0 0">Direkte videre uten kamp: ${d.by.map(nm).map(esc).join(', ')}</p>`:'';
-    return `<div class="card" style="padding:0;overflow:hidden"><h3 style="padding:14px 16px 6px">${E.CUP_ROUND_NAME[k]}</h3>${rows}${by?`<div style="padding:0 16px 12px">${by}</div>`:''}</div>`; };
-  const blocks=[0,1,2,3].map(roundBlock).filter(Boolean);
-  const alive=C.alive?`<div class="card"><h3>Lag som er igjen <small>${C.alive.length}</small></h3><p class="small" style="margin:0">${C.alive.map(i=>`<span class="${i===me?'tag human':''}">${esc(nm(i))}</span>`).join(' · ')}</p></div>`:`<div class="card"><h3>Trekning</h3><p class="small muted" style="margin:0">Alle ${E.N_TEAMS} lag er med. Ved første runde trekkes to lag direkte videre, og de øvrige tolv møtes i seks kamper. Deretter er det kvartfinale, semifinale og finale (med bronsefinale).</p></div>`;
+  const hasLast=!!(C.last&&C.last.br); const view=S.cupView==='last'&&hasLast?'last':'cur';
+  const Cx=view==='last'?{...C.last,ph:0,k:4}:C;
+  const seg=hasLast?`<div class="seg" role="group" aria-label="Velg cup" style="margin-bottom:12px"><button data-act="cupsel" data-v="cur" aria-pressed="${view==='cur'}">Sesong ${C.s}</button><button data-act="cupsel" data-v="last" aria-pressed="${view==='last'}">Sesong ${C.last.s}</button></div>`:'';
   const hist=(C.hist||[]).slice().reverse();
   const hall=`<div class="card"><h3>Tidligere cupvinnere</h3>${hist.length?hist.map(h=>`<div class="yrow"><b>Sesong ${h.s}</b>: ${esc(h.g)} <span class="muted small">· sølv ${esc(h.sv)}${h.b?' · bronse '+esc(h.b):''}</span></div>`).join(''):'<div class="empty" style="padding:8px 0">Ingen ferdigspilte cuper ennå.</div>'}</div>`;
-  const prev=C.last&&!blocks.length?`<div class="card"><h3>Forrige cup <small>sesong ${C.last.s}</small></h3>${C.last.log.map(r=>`<div class="caps" style="margin-top:8px">${E.CUP_ROUND_NAME[r.k]}</div>${r.m.map(m=>`<div class="yrow"><b>${esc(nm(m[0]))}</b> <span class="num">${m[2]} – ${m[3]}</span> <b>${esc(nm(m[1]))}</b>${m[4]?` <span class="tiny muted">(str. ${m[4][0]}–${m[4][1]})</span>`:''}</div>`).join('')}`).join('')}</div>`:'';
+  // rundens lag i cupen
+  const docs=(S.cupAll||{})[Cx.s]||{}; const doneKs=[0,1,2,3].filter(k=>roundDone(docs[k]));
+  let toty='';
+  if(doneKs.length){ const sk=doneKs.includes(S.totr)?S.totr:doneKs[doneKs.length-1];
+    const sg=`<div class="seg" role="group" style="margin:0 0 10px">${doneKs.map(k=>`<button data-act="totrsel" data-k="${k}" aria-pressed="${k===sk}">${E.CUP_ROUND_NAME[k]}</button>`).join('')}</div>`;
+    toty=`<div style="margin-top:16px">${sg}${totrCard(docs[sk].m,E.CUP_ROUND_NAME[sk]+' · sesong '+Cx.s,true)}</div>`; }
+  const intro=C.br?`Alle ${E.N_TEAMS} lag er med. To lag har walkover i første runde. Vinnerne går videre i treet, og tapende semifinalister spiller bronsefinale. Uavgjort etter full tid avgjøres på straffer.`:'';
   return `<div class="sectionhead"><h2>Bjørn Ove Klups Cup</h2><span class="muted small">Sesong ${C.s} · utslagscup</span></div>
-  <div class="note" style="margin-bottom:16px">${status}. Alle lag i serien er med. Uavgjort etter full tid avgjøres på straffer.</div>
-  <div class="grid g2" style="align-items:start">${alive}${hall}${blocks.join('')}${prev}</div>`;
+  <div class="note" style="margin-bottom:16px">${status}. ${intro} Trykk på en kamp i treet for å se den.</div>
+  ${seg}<div class="card" style="padding:12px 8px 12px 12px"><div class="bracketwrap">${bracketHtml(Cx,view==='cur')}</div></div>
+  <div style="margin-top:16px">${hall}</div>${toty}`;
 }
 function yLineupCard(t){
   return `<div class="card" style="margin-top:16px"><h3>Ungdomslagets oppstilling <small>${t.ylu?'egen oppstilling':'automatisk'}</small></h3><p class="small muted" style="margin:0 0 10px;max-width:70ch">Oppstillingen settes opp i Oppstilling-fanen, på samme måte som for hovedlaget, med formasjon, taktikk, bytter og sortering av spillerne. Velg ungdomslaget øverst.</p><button class="btn primary" data-act="goyl">Sett opp ungdomslaget</button></div>`;
+}
+function yEstimate(t){
+  const tr=t.ytr||t.training||{a:null,b:null}; const ks=[tr.a,tr.b].filter(Boolean); if(!ks.length||!t.yp.length) return '';
+  const share=ks.length===2?0.6:1; const lu=yLU(t); const roles=E.lineupRoles({players:t.yp,lineup:lu,training:tr});
+  const rows=sortPlayers(t.yp).map(p=>{ const inLine=!!roles[p.id]; const role=roles[p.id]||E.bestRole(p);
+    const cells=ks.map(k=>{ const i=E.SKI[k]; const lv=p.s[i]; const cap=p.mx?Math.min(20,p.mx[i]):20;
+      if(lv>=cap) return `<td>${sk(lv)} <span class="muted small">Maks ${cap}</span></td>`;
+      const need=E.cost(lv); const have=p.pr[i]||0; const rate=E.trainingRate(p,k,role,inLine,share); const wk=rate>0.02?Math.max(1,Math.ceil((need-have)/rate)):null;
+      const toCap=rate>0.02?Math.ceil((function(){ let tot=-have, l=lv; while(l<cap){ tot+=E.cost(l); l++; } return tot; })()/rate):null;
+      return `<td><div class="row" style="gap:8px;flex-wrap:nowrap">${sk(lv)}<div class="bar" style="width:70px"><i style="width:${Math.min(100,have/need*100)}%"></i></div><span class="small muted num" title="${wk?'Ca. '+wk+' vanlige uker til neste nivå. Ca. '+toCap+' uker til maks ('+cap+') hvis farten holder seg.':''}">${wk?'ca. '+wk+' u':'—'}</span></div></td>`; }).join('');
+    return `<tr><td><span class="pname">${esc(p.n)}</span><div class="tiny muted">${E.ROLE_NAME[role]}${inLine?'':' (benk, halv effekt)'} · ${ageStr(p)}</div></td>${cells}</tr>`; }).join('');
+  return `<div class="card" style="margin-top:16px"><h3>Treningsestimat for ungdomslaget</h3><div class="tablewrap"><table><thead><tr><th>Spiller</th>${ks.map(k=>`<th>${E.SK_NAME[k]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div><p class="tiny muted" style="margin:8px 0 0;max-width:70ch">Estimat i vanlige uker til neste nivå (hold musepekeren over tallet for tid til maks). Ungdomslaget trener tre ganger i uka, og spillerne stopper ved sitt maks-nivå så lenge de er i ungdomslaget. Estimatet gjelder dagens treningsvalg og oppstilling.</p></div>`;
 }
 function yTrainCard(t){
   const tr=t.ytr||t.training||{a:null,b:null}; const own=!!t.ytr;
@@ -2750,7 +2856,7 @@ function viewYouth(){
   <div class="card"><h3>Tabell</h3><table><thead><tr><th>#</th><th>Lag</th><th class="r">K</th><th class="r">+/-</th><th class="r">P</th></tr></thead><tbody>${order.map((o2,k)=>`<tr class="${o2.t===S.me?'me':''}"><td class="num">${k+1}</td><td>${esc(nm(o2.t))}</td><td class="r num">${o2.p}</td><td class="r num">${o2.gd>0?'+':''}${o2.gd}</td><td class="r num"><b>${o2.pts}</b></td></tr>`).join('')}</tbody></table></div></div>
   ${last?`<div class="card" style="margin-top:16px"><h3>Siste runde <small>runde ${last.r+1}</small></h3>${last.m.map(m=>`<div class="yrow"><b>${esc(nm(m[0]))}</b> <span class="num">${m[2]} – ${m[3]}</span> <b>${esc(nm(m[1]))}</b>${m[4].length?`<div class="tiny muted">${m[4].map(g=>`${g[1]} ${g[0]}'`).join(', ')}</div>`:''}</div>`).join('')}</div>`:''}
   ${(t.yl||[]).length?`<div class="card" style="margin-top:16px"><h3>Hendelser</h3><ul class="yfacts">${t.yl.map(x=>`<li>${esc(x.t)}</li>`).join('')}</ul></div>`:''}`;
-  return `<div class="sectionhead"><h2>${esc(yname(t))}</h2><span class="muted small">Ungdomslag · spillere i alder 15–18 år</span><span class="spacer"></span><button class="btn sm" data-act="yrename">Endre navn</button></div>${scout}${yLineupCard(t)}${yTrainCard(t)}${list}${serie}`;
+  return `<div class="sectionhead"><h2>${esc(yname(t))}</h2><span class="muted small">Ungdomslag · spillere i alder 15–18 år</span><span class="spacer"></span><button class="btn sm" data-act="yrename">Endre navn</button></div>${scout}${yLineupCard(t)}${yTrainCard(t)}${yEstimate(t)}${list}${serie}`;
 }
 function playerModal(id){
   const f=findPlayer(id); const ctx=S.pctx; S.pctx=null;
@@ -2859,6 +2965,7 @@ const actions={
   trmore(){ S.trN=(S.trN||8)+12; render(); },
   ssort(el){ S.sortKey=el.dataset.k; render(); },
   msort(el){ S.mf.sort=el.dataset.k; render(); },
+  lsortage(){ S.lsort=S.lsort==='age'?'ageO':'age'; render(); },
   lsortk(el){ S.lsort='sk:'+el.dataset.k; render(); },
   mview(el){ S.mview=el.dataset.v; if(S.mpArgs&&$('#mp')) refreshPanel(); else render(); },
   rpstart(el){ const a=S.mpArgs; if(!a) return; const key=el.dataset.key; S.rp={key,el:0,speed:3,playing:true,last:Date.now()}; S.scrub=null; render(); },
@@ -2874,7 +2981,10 @@ const actions={
   luclear(){ const t=myTeam(); if(!t||!perMatch()) return; const r=S.lr; S.draft=null; const lus={...(t.lus||{})}; delete lus[luKey(r)]; S.teams[S.me]={...t,lus}; requestRender(); run(()=>S.store.saveRoundLineup(S.me,r,null),'Kampen bruker nå standardoppstillingen.'); },
   cmpmode(el){ S.cmp=el.dataset.v; render(); },
   editround(el){ dropDraft(true); S.lr=+el.dataset.r; S.tab='lineup'; try{ localStorage.setItem('lm-tab','lineup'); }catch(e){} render(); window.scrollTo(0,0); },
-  cupmatch(el){ const k=+el.dataset.k, h=+el.dataset.h; S.tab='cup'; S.md={r:k,h,cup:1}; S.watch={r:k,h}; S.rp=null; render(); window.scrollTo(0,0); },
+  cupmatch(el){ const k=+el.dataset.k, h=+el.dataset.h, cs=+el.dataset.cs; S.tab=el.dataset.from==='games'?'games':'cup'; S.md={r:k,h,cup:1,cs}; S.watch={r:k,h}; S.rp=null; render(); window.scrollTo(0,0); },
+  gocup(){ S.tab='cup'; render(); window.scrollTo(0,0); },
+  cupsel(el){ S.cupView=el.dataset.v; render(); },
+  totrsel(el){ S.totr=+el.dataset.k; render(); },
   yluauto(){ const t=myTeam(); if(!t) return; S.ydraft=E.autoLineup({players:t.yp}); render(); },
   ylusave(){ const t=myTeam(); if(!t||!S.ydraft) return; const lu=clone(S.ydraft); const ids=lu.sl.filter(Boolean); if(new Set(ids).size<11){ toast('Velg 11 ulike spillere.',true); return; } lu.cap=lu.cap&&ids.includes(lu.cap)?lu.cap:ids[0]; if(!ids.includes(lu.tk)){ const by=E.mapById(t.yp); lu.tk=ids.slice().sort((a,b)=>by[b].s[6]-by[a].s[6])[0]; } S.ydraft=null; S.teams[S.me]={...t,ylu:lu}; requestRender(); run(()=>S.store.saveYouthLineup(S.me,lu),'Ungdomsoppstillingen er lagret.'); },
   ylureset(){ const t=myTeam(); if(!t) return; S.ydraft=null; S.teams[S.me]={...t,ylu:null}; requestRender(); run(()=>S.store.saveYouthLineup(S.me,null),'Ungdomslaget bruker automatisk oppstilling.'); },
@@ -2981,10 +3091,10 @@ function afterTeams(){
   const ids=[...new Set(S.teams.filter(t=>t&&t.owner).map(t=>t.owner))];
   if(S.user && ids.length){ S.user.profiles(ids).then(ps=>{ let ch=false; ids.forEach(id=>{ const n=(ps[id]&&ps[id].name)||''; if(n && S.names[id]!==n){ S.names[id]=n; ch=true; } if(ps[id]&&ps[id].isMe&&n) S.myName=n; }); if(ch) requestRender(); }).catch(()=>{}); }
 }
-let unsubCup=null, cupSeason=null;
+let unsubCup=null;
 function watchCup(db){
-  const c=S.league&&S.league.c; const s=c&&c.s; if(!s||s===cupSeason) return; cupSeason=s; if(unsubCup) unsubCup(); S.cup={};
-  unsubCup=db.collection('cup').where('cs','==',s).onSnapshot(q=>{ const m={}; q.docs.forEach(d=>{ const v=d.data(); if(v) m[v.r]=v; }); S.cup=m; requestRender(); },e=>console.warn(e));
+  if(unsubCup) return; S.cupAll={}; S.cup={};
+  unsubCup=db.collection('cup').onSnapshot(q=>{ const all={}; q.docs.forEach(d=>{ const v=d.data(); if(v&&v.cs!=null){ (all[v.cs]=all[v.cs]||{})[v.r]=v; } }); S.cupAll=all; requestRender(); },e=>console.warn(e));
 }
 let unsubRounds=null, roundsSeason=null;
 function watchRounds(db){
